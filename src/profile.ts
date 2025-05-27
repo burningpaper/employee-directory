@@ -99,7 +99,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   el('emp-bio').textContent   = f.Bio || '';
   el('emp-photo').src         = (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128';
   // render skills
-  const esRes = await get(api('Employee Skills', `?filterByFormula=${encodeURIComponent(`{Employee}='${REC_ID}'`)}`));
+  const esRes = await get(api('Skill Levels', `?filterByFormula=${encodeURIComponent(`{Employee}='${REC_ID}'`)}`));
   const skillIds = esRes.records.map(r => r.fields['Skill']?.[0]).filter(Boolean);
   let skillsMap = {};
   if (skillIds.length) {
