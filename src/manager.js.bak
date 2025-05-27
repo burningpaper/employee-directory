@@ -1,0 +1,189 @@
+const el  = id => document.getElementById(id);
+const $$  = sel => Array.from(document.querySelectorAll(sel));
+
+// 🌐 Airtable setup
+const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID.trim();
+const PAT     = import.meta.env.VITE_AIRTABLE_PAT.trim();
+if (!BASE_ID || !PAT) throw new Error('Missing Airtable env vars');
+const HEADERS = { Authorization: `Bearer ${PAT}`, 'Content-Type': 'application/json' };
+const api = (table, query = '') =>
+  `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(table)}${query}`;
+
+// 🗄️ Fetch helper
+async function getJSON(url) {
+  const r = await fetch(url, { headers: HEADERS, cache:'no-store' });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// 🗂️ State
+let EMPLOYEES = [];
+let mgrSearchTerm = '';
+let SKILLS    = [];
+let TRAITS    = [];
+
+// 🔄 Load records (paged)
+async function loadAllData() {
+  let allEmps = [];
+  let offset;
+  do {
+    const url = api('Employee Database', `?pageSize=100${offset ? `&offset=${offset}` : ''}`);
+    const res = await getJSON(url);
+    allEmps = allEmps.concat(res.records);
+    offset = res.offset;
+  } while (offset);
+  EMPLOYEES = allEmps;
+  const [skRes, trRes] = await Promise.all([
+    getJSON(api('Skills', '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name')),
+    getJSON(api('Traits', '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name'))
+  ]);
+  SKILLS = skRes.records;
+  TRAITS = trRes.records;
+}
+
+// 🎨 Render employee grid with name filter
+function renderGrid() {
+  const container = el('manager-grid'); if (!container) return;
+  container.innerHTML = '';
+  const term = mgrSearchTerm.toLowerCase();
+  const toShow = EMPLOYEES.filter(emp => (emp.fields['Employee Name']||'').toLowerCase().includes(term));
+  if (!toShow.length) {
+    el('manager-empty').classList.remove('hidden');
+    return;
+  } else {
+    el('manager-empty').classList.add('hidden');
+  }
+  toShow.forEach(emp => {
+    const f = emp.fields;
+    container.insertAdjacentHTML('beforeend',
+      `<div class="bg-white rounded-lg shadow p-4 flex flex-col">
+         <h3 class="font-medium text-gray-900 mb-1">${f['Employee Name']||''}</h3>
+         <p class="text-sm text-gray-500 mb-3">${f['Job Title']||''}</p>
+         <button data-id="${emp.id}" class="editBtn mt-auto px-3 py-1 text-sm bg-indigo-600 text-white rounded">Edit Profile</button>
+       </div>`
+    );
+  });
+  $$('.editBtn').forEach(btn => btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
+}
+
+// 📋 Open Edit Modal with inline experience management
+async function openEditModal(recordId) {
+  const empRes = await getJSON(api('Employee Database', `/${recordId}`));
+  const f = empRes.fields;
+  el('editContent').innerHTML = `
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold">Edit Profile</h2>
+      <button id="modalClose" class="text-gray-500 hover:text-gray-700">✕</button>
+    </div>
+    <div class="border-b mb-4">
+      <nav class="flex space-x-4">
+        <button data-tab="basic" class="tab-btn active">Basic</button>
+        <button data-tab="skills" class="tab-btn">Skills</button>
+        <button data-tab="traits" class="tab-btn">Traits</button>
+        <button data-tab="experience" class="tab-btn">Experience</button>
+      </nav>
+    </div>
+    <div id="tabContent"></div>
+    <div class="mt-6 flex justify-end space-x-2">
+      <button id="modalCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
+      <button id="modalSave" class="px-3 py-1 bg-green-600 text-white rounded">Save</button>
+    </div>
+  `;
+  el('editModal').classList.remove('hidden');
+
+  function renderBasic() {
+    el('tabContent').innerHTML = `
+      <div class="space-y-4">
+        <label>Name <input id="editName" class="w-full border rounded px-2 py-1" value="${f['Employee Name']||''}"></label>
+        <label>Title <input id="editTitle" class="w-full border rounded px-2 py-1" value="${f['Job Title']||''}"></label>
+        <label>Dept  <input id="editDept" class="w-full border rounded px-2 py-1" value="${f.Department||''}"></label>
+        <label>Loc   <input id="editLoc" class="w-full border rounded px-2 py-1" value="${f.Location||''}"></label>
+      </div>`;
+  }
+  function renderSkills() {
+    const opts = SKILLS.map(r =>
+      `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" class="modalSkillChk" ${(f['Skills List']||[]).includes(r.id)?'checked':''}>${r.fields['Skill Name']}</label>`
+    ).join('');
+    el('tabContent').innerHTML = `<div class="max-h-60 overflow-y-auto space-y-2">${opts}</div>`;
+  }
+  function renderTraits() {
+    const opts = TRAITS.map(r =>
+      `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" class="modalTraitChk" ${(f['Personality Traits']||[]).includes(r.id)?'checked':''}>${r.fields['Trait Name']}</label>`
+    ).join('');
+    el('tabContent').innerHTML = `<div class="max-h-60 overflow-y-auto space-y-2">${opts}</div>`;
+  }
+  async function renderExperience() {
+    const content = el('tabContent');
+    content.innerHTML = `<button id="modalAddExp" class="mb-4 px-3 py-1 text-xs bg-indigo-50 text-indigo-700 rounded">+ Add Experience</button><div id="modalExpList" class="space-y-4"></div>`;
+    const res = await getJSON(api('Work Experience', `?filterByFormula=${encodeURIComponent(`{Employee Code}='${f['Employee Code']}'`)}`));
+    res.records.forEach(r => {
+      const ef = r.fields;
+      el('modalExpList').insertAdjacentHTML('beforeend',
+        `<div class="border rounded p-2 relative existing-exp" data-id="${r.id}">
+           <button class="deleteExp absolute top-1 right-1 text-xs text-red-600">×</button>
+           <p><strong>${ef.Company}</strong> – ${ef.Role}</p>
+           <p class="text-xs text-gray-500">${ef['Start Date']?.slice(0,7)} to ${ef['End Date']?.slice(0,7)||'Present'}</p>
+         </div>`);
+    });
+    content.addEventListener('click', e => {
+      if (e.target.classList.contains('deleteExp')) {
+        const div = e.target.closest('.existing-exp');
+        fetch(api('Work Experience/'+div.dataset.id), {method:'DELETE', headers:HEADERS})
+          .then(()=> div.remove());
+      }
+    });
+    el('modalAddExp').onclick = () => {
+      const row = document.createElement('div'); row.className='space-y-2 border rounded p-2 new-exp';
+      row.innerHTML = `
+        <input placeholder="Company" class="w-full border rounded px-2 py-1 newCompany">
+        <input placeholder="Role"    class="w-full border rounded px-2 py-1 newRole">
+        <div class="flex gap-2">
+          <input type="month" class="w-full border rounded px-2 py-1 newStart">
+          <input type="month" class="w-full border rounded px-2 py-1 newEnd">
+        </div>
+        <textarea placeholder="Description" class="w-full border rounded p-2 newDesc"></textarea>
+        <button class="saveExp px-3 py-1 bg-green-600 text-white rounded text-xs">Save</button>
+      `;
+      el('modalExpList').appendChild(row);
+      row.querySelector('.saveExp').onclick = async () => {
+        await fetch(api('Work Experience'), { method:'POST', headers:HEADERS,
+          body: JSON.stringify({ records:[{ fields:{
+            Company: row.querySelector('.newCompany').value,
+            Role:    row.querySelector('.newRole').value,
+            'Start Date': row.querySelector('.newStart').value?new Date(row.querySelector('.newStart').value).toISOString():undefined,
+            'End Date':   row.querySelector('.newEnd').value?new Date(row.querySelector('.newEnd').value).toISOString():undefined,
+            Description: row.querySelector('.newDesc').value,
+            'Employee Code': f['Employee Code']
+          }}] })
+        });
+        renderExperience();
+      };
+  }
+
+  const tabs = { basic: renderBasic, skills: renderSkills, traits: renderTraits, experience: renderExperience };
+  $$('.tab-btn').forEach(btn => btn.onclick = () => { $$('.tab-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); tabs[btn.dataset.tab](); });
+  tabs.basic();
+
+  el('modalClose').onclick = el('modalCancel').onclick = () => el('editModal').classList.add('hidden');
+  el('modalSave').onclick = async () => {
+    const upd = {
+      'Employee Name': el('editName').value,
+      'Job Title':     el('editTitle').value,
+      Department:      el('editDept').value,
+      Location:        el('editLoc').value,
+      'Skills List':   $$('.modalSkillChk:checked').map(i=>i.value),
+      'Personality Traits': $$('.modalTraitChk:checked').map(i=>i.value)
+    };
+    await fetch(api('Employee Database'),{method:'PATCH',headers:HEADERS,
+      body: JSON.stringify({ records:[{ id:recordId,fields:upd }] })
+    });
+    el('editModal').classList.add('hidden'); renderGrid();
+  };
+}
+
+// 🌟 Init
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadAllData();
+  renderGrid();
+  const si = el('mgrSearch'); if(si) si.oninput = e=>{mgrSearchTerm=e.target.value;renderGrid();};
+});
