@@ -109,7 +109,12 @@ async function openAdvancedModal() {
        </label>`
     ).join('');
 
-  el('advContent').innerHTML = `\$1
+  el('advContent').innerHTML = `
+    <div class="mb-4">
+      <h3 class="font-medium">Job Title</h3>
+      <input type="text" id="jobTitleInput" class="w-full border rounded px-2 py-1" placeholder="e.g. Creative Director">
+    </div>
+\$1
     <div class="mb-4">
       <h3 class="font-medium">Job Title</h3>
       <input type="text" id="jobTitleInput" class="w-full border rounded px-2 py-1" placeholder="e.g. Creative Director">
