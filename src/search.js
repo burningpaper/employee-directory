@@ -14,7 +14,8 @@ const api = (table, query = '') =>
   `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(table)}${query}`;
 
 // 📦 State
-let EMPLOYEES       = [];
+let EMPLOYEES = [];
+let JOB_TITLE_FILTER = '';
 let skillFilter     = [];
 let clientFilter    = [];
 let industryFilter  = [];
@@ -50,7 +51,8 @@ function renderGrid(records) {
       const matchSkill    = !skillFilter.length  || skills.some(id => skillFilter.includes(id));
       const matchClient   = !clientFilter.length || clients.some(id => clientFilter.includes(id));
       const matchIndustry = !industryFilter.length || clients.some(id => industryFilter.includes(clientIndustryMap[id]));
-      return nameMatch && matchSkill && matchClient && matchIndustry;
+      const matchJob = !JOB_TITLE_FILTER || (f['Job Title']||'').toLowerCase().includes(JOB_TITLE_FILTER);
+      return nameMatch && matchSkill && matchClient && matchIndustry && matchJob;
     })
     .sort((a, b) => (a.fields['Employee Name'] || '').localeCompare(b.fields['Employee Name'] || ''));
 
@@ -107,26 +109,10 @@ async function openAdvancedModal() {
        </label>`
     ).join('');
 
-  el('advContent').innerHTML = `
-    <h2 class="text-lg font-semibold mb-4">Advanced Search</h2>
+  el('advContent').innerHTML = `\$1
     <div class="mb-4">
-      <h3 class="font-medium">Skills</h3>
-      <div class="max-h-40 overflow-y-auto space-y-2">${makeList(skRes, 'skillChk', 'Skill Name')}</div>
-    </div>
-    <div class="mb-4">
-      <h3 class="font-medium">Client Experience</h3>
-      <div class="max-h-40 overflow-y-auto space-y-2">${makeList(clRes, 'clientChk', 'Client Name')}</div>
-    </div>
-    <div class="mb-4">
-      <h3 class="font-medium">Industry</h3>
-      <div class="max-h-40 overflow-y-auto space-y-2">
-        ${industries.map(ind =>
-          `<label class="flex items-center gap-2">
-             <input type="checkbox" value="${ind}" class="industryChk" ${industryFilter.includes(ind)?'checked':''}>
-             ${ind}
-           </label>`
-        ).join('')}
-      </div>
+      <h3 class="font-medium">Job Title</h3>
+      <input type="text" id="jobTitleInput" class="w-full border rounded px-2 py-1" placeholder="e.g. Creative Director">
     </div>
     <div class="flex justify-end space-x-2">
       <button id="advCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
@@ -136,7 +122,9 @@ async function openAdvancedModal() {
 
   el('advModal').classList.remove('hidden');
   el('advCancel').onclick = () => el('advModal').classList.add('hidden');
-  el('advSave').onclick   = () => {
+  el('advSave').onclick = () => {
+    const jobInput = el('jobTitleInput')?.value.trim().toLowerCase();
+    JOB_TITLE_FILTER = jobInput;
     skillFilter     = $$('.skillChk:checked').map(i=>i.value);
     clientFilter    = $$('.clientChk:checked').map(i=>i.value);
     industryFilter  = $$('.industryChk:checked').map(i=>i.value);
