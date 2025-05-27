@@ -75,7 +75,7 @@ function openExperienceModal(){
       'Start Date': el('expStart').value?new Date(el('expStart').value).toISOString():undefined,
       'End Date': el('expEnd').value?new Date(el('expEnd').value).toISOString():undefined,
       Description: el('expDesc').value,
-      'Employee Code': [REC_ID]
+      RECORD_ID({Employee Code})='${REC_ID}'
     }}]};
     await post(EXP_TABLE, body);
     closeModal();location.reload();
