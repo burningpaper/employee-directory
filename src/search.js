@@ -114,10 +114,25 @@ async function openAdvancedModal() {
       <h3 class="font-medium">Job Title</h3>
       <input type="text" id="jobTitleInput" class="w-full border rounded px-2 py-1" placeholder="e.g. Creative Director">
     </div>
-\$1
     <div class="mb-4">
-      <h3 class="font-medium">Job Title</h3>
-      <input type="text" id="jobTitleInput" class="w-full border rounded px-2 py-1" placeholder="e.g. Creative Director">
+      <h3 class="font-medium">Skills</h3>
+      ${makeList(skRes, 'skillChk', 'Skill Name')}
+    </div>
+    <div class="mb-4">
+      <h3 class="font-medium">Character Traits</h3>
+      <p class="text-sm text-gray-500">(Coming soon)</p>
+    </div>
+    <div class="mb-4">
+      <h3 class="font-medium">Client Experience</h3>
+      ${makeList(clRes, 'clientChk', 'Client Name')}
+    </div>
+    <div class="mb-4">
+      <h3 class="font-medium">Industry</h3>
+      ${industries.map(ind =>
+        `<label class="flex items-center gap-2">
+          <input type="checkbox" value="${ind}" class="industryChk" ${industryFilter.includes(ind)?'checked':''}>
+          ${ind}
+        </label>`).join('')}
     </div>
     <div class="flex justify-end space-x-2">
       <button id="advCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
