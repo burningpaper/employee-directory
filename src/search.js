@@ -123,10 +123,6 @@ async function loadDirectory() {
     console.error(e);
     el('results').innerHTML = '<p class="text-center text-red-600">Error loading employees.</p>';
   }
-  } catch (e) {
-    console.error(e);
-    el('results').innerHTML = '<p class="text-center text-red-600">Error loading employees.</p>';
-  }
 }
 
 // 🛠 Advanced Search modal
