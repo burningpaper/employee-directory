@@ -160,4 +160,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') renderGrid(EMPLOYEES);
   });
   el('advBtn')?.addEventListener('click', openAdvancedModal);
+  el('resetBtn')?.addEventListener('click', () => {
+    JOB_TITLE_FILTER = '';
+    skillFilter = [];
+    clientFilter = [];
+    industryFilter = [];
+    el('quickSearch').value = '';
+    renderGrid(EMPLOYEES);
+  });
 });
