@@ -89,7 +89,7 @@ async function loadDirectory() {
     // Fetch Employee Skills
     let allSkills = [], skillOffset;
     do {
-      const url = api('Employee Skills', `?pageSize=100${skillOffset ? `&offset=${skillOffset}` : ''}`);
+      const url = api('Skill Levels', `?pageSize=100${skillOffset ? `&offset=${skillOffset}` : ''}`);
       const res = await getJSON(url);
       allSkills = allSkills.concat(res.records);
       skillOffset = res.offset;
