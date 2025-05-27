@@ -62,23 +62,12 @@ function renderGrid() {
 async function openEditModal(recordId) {
   const res = await fetch(api('Employee Database', `/${recordId}`), { headers: HEADERS });
   const { fields: f } = await res.json();
-  el('editContent').innerHTML = `
-    <label>Name:<br><input id="edit_name" class="w-full border rounded px-2 py-1" value="${f['Employee Name']||''}"></label>
-    <label>Title:<br><input id="edit_title" class="w-full border rounded px-2 py-1" value="${f['Job Title']||''}"></label>
-    <label>Department:<br>
-  <select id="edit_dept" class="w-full border rounded px-2 py-1">
-    <option ${f['Department']==='Client Service'?'selected':''}>Client Service</option>
-    <option ${f['Department']==='Creative'?'selected':''}>Creative</option>
-    <option ${f['Department']==='Operations'?'selected':''}>Operations</option>
-  </select>
-</label>
-    <label>Location:<br>
-  <select id="edit_loc" class="w-full border rounded px-2 py-1">
-    <option ${f['Location']==='Johannesburg'?'selected':''}>Johannesburg</option>
-    <option ${f['Location']==='Cape Town'?'selected':''}>Cape Town</option>
-  </select>
-</label>
-    <label>Skills:<br><select id="edit_skills" multiple class="w-full border rounded px-2 py-1 h-32">
+  el('editContent').innerHTML = `\$1<div id="skills-section" class="mb-4">
+      <label class="block mb-1 font-medium">Skills & Levels:</label>
+      <div id="edit_skills_container" class="space-y-2"></div>
+      <button id="add_skill" class="mt-2 px-2 py-1 bg-indigo-100 rounded">+ Add Skill</button>
+    </div>
+<br><select id="edit_skills" multiple class="w-full border rounded px-2 py-1 h-32">
       ${skills.map(r => `<option value="${r.id}" ${ (f['Skills List']||[]).includes(r.id) ? 'selected' : '' }>${r.fields['Skill Name']}</option>`).join('')}
     </select></label>
     <label>Traits:<br><select id="edit_traits" multiple class="w-full border rounded px-2 py-1 h-32">
@@ -89,30 +78,97 @@ async function openEditModal(recordId) {
       <button id="editSave"   class="px-3 py-1 bg-green-600 text-white rounded">Save</button>
     </div>`;
   el('editModal').classList.remove('hidden');
+
+  // Populate existing skills
+  const skillsRes = await fetch(api('Skill Levels', `?filterByFormula=${encodeURIComponent(`{Employee Code}='${recordId}'`)}`), { headers: HEADERS });
+  const skillsData = await skillsRes.json();
+  const container = el('edit_skills_container');
+  container.innerHTML = '';
+  skillsData.records.forEach(rec => {
+    const div = document.createElement('div');
+    div.className = 'skill-entry flex gap-2 items-center';
+    div.dataset.id = rec.id;
+    div.innerHTML = `
+      <select class="skill-select border rounded px-2 py-1">${skills.map(s => `<option value="${s.id}" ${rec.fields['Skill']?.[0]===s.id?'selected':''}>${s.fields['Skill Name']}</option>`).join('')}</select>
+      <select class="level-select border rounded px-2 py-1">
+        ${['Basic','Average','Good','Excellent'].map(l => `<option ${rec.fields['Level']===l?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <button class="remove-skill text-red-500">×</button>`;
+    container.appendChild(div);
+  });
+
+  el('add_skill').onclick = () => {
+    const div = document.createElement('div');
+    div.className = 'skill-entry flex gap-2 items-center';
+    div.innerHTML = `
+      <select class="skill-select border rounded px-2 py-1">${skills.map(s => `<option value="${s.id}">${s.fields['Skill Name']}</option>`).join('')}</select>
+      <select class="level-select border rounded px-2 py-1">
+        ${['Basic','Average','Good','Excellent'].map(l => `<option>${l}</option>`).join('')}
+      </select>
+      <button class="remove-skill text-red-500">×</button>`;
+    container.appendChild(div);
+  };
+
+  container.addEventListener('click', e => {
+    if (e.target.classList.contains('remove-skill')) {
+      e.target.closest('.skill-entry')?.remove();
+    }
+  });
   el('editCancel').onclick = () => el('editModal').classList.add('hidden');
-  el('editSave').onclick   = async () => {
+  el('editSave').onclick = async () => {
     const upd = {
       'Employee Name': el('edit_name').value,
       'Job Title':     el('edit_title').value,
       'Department':    el('edit_dept').value,
       'Location':      el('edit_loc').value,
-      'Skills List':   Array.from(el('edit_skills').selectedOptions).map(o => o.value),
       'Personality Traits': Array.from(el('edit_traits').selectedOptions).map(o => o.value)
     };
+
+    const skillInputs = Array.from(document.querySelectorAll('.skill-entry'));
+    const updates = skillInputs.map(div => ({
+      id: div.dataset.id,
+      skill: div.querySelector('.skill-select')?.value,
+      level: div.querySelector('.level-select')?.value
+    })).filter(e => e.skill && e.level);
+
     try {
+      // Save employee
       const response = await fetch(api('Employee Database', `/${recordId}`), {
-        method: 'PATCH',
-        headers: HEADERS,
-        body: JSON.stringify({ fields: upd })
+        method: 'PATCH', headers: HEADERS, body: JSON.stringify({ fields: upd })
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(JSON.stringify(result));
-      console.log('Saved:', result);
+      if (!response.ok) throw new Error(JSON.stringify(await response.json()));
+
+      // Load current skill levels
+      const currentRes = await fetch(api('Skill Levels', `?filterByFormula=${encodeURIComponent(`{Employee Code}='${recordId}'`)}`), { headers: HEADERS });
+      const current = await currentRes.json();
+      const existing = current.records;
+
+      // Patch or delete existing
+      for (const old of existing) {
+        const match = updates.find(u => u.id === old.id);
+        if (match) {
+          await fetch(api('Skill Levels', `/${old.id}`), {
+            method: 'PATCH', headers: HEADERS,
+            body: JSON.stringify({ fields: { 'Skill': [match.skill], 'Level': match.level } })
+          });
+        } else {
+          await fetch(api('Skill Levels', `/${old.id}`), { method: 'DELETE', headers: HEADERS });
+        }
+      }
+
+      // Create new
+      for (const entry of updates.filter(u => !u.id)) {
+        await fetch(api('Skill Levels'), {
+          method: 'POST', headers: HEADERS,
+          body: JSON.stringify({ fields: { 'Employee Code': [recordId], 'Skill': [entry.skill], 'Level': entry.level } })
+        });
+      }
     } catch (err) {
-      console.error('Failed to save employee:', err);
-      alert('Failed to save changes: ' + err.message);
+      console.error('Save failed:', err);
+      alert('Failed to save: ' + err.message);
       return;
     }
+
     el('editModal').classList.add('hidden');
     const updated = await fetch(api('Employee Database', `/${recordId}`), { headers: HEADERS }).then(r => r.json());
     const idx = employees.findIndex(e => e.id === recordId);

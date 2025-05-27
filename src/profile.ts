@@ -99,10 +99,20 @@ window.addEventListener('DOMContentLoaded', async () => {
   el('emp-bio').textContent   = f.Bio || '';
   el('emp-photo').src         = (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128';
   // render skills
-  if (f['Skills List']?.length) {
-    const skillsRes = await get(api(SKILL_TABLE, `?filterByFormula=${encodeURIComponent(`OR(${f['Skills List'].map(id=>`RECORD_ID()='${id}'`).join(',')})`)}`));
-    skillsRes.records.forEach(r => el('emp-skills').insertAdjacentHTML('beforeend', `<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-sm">${r.fields['Skill Name']}</span>`));
+  const esRes = await get(api('Employee Skills', `?filterByFormula=${encodeURIComponent(`{Employee}='${REC_ID}'`)}`));
+  const skillIds = esRes.records.map(r => r.fields['Skill']?.[0]).filter(Boolean);
+  let skillsMap = {};
+  if (skillIds.length) {
+    const skillsRes = await get(api('Skills', `?filterByFormula=${encodeURIComponent(`OR(${skillIds.map(id => `RECORD_ID()='${id}'`).join(',')})`)}`));
+    skillsRes.records.forEach(r => skillsMap[r.id] = r.fields['Skill Name']);
   }
+  esRes.records.forEach(r => {
+    const skillId = r.fields['Skill']?.[0];
+    const skillName = skillsMap[skillId] || 'Unknown';
+    const level = r.fields['Level'] || '';
+    el('emp-skills').insertAdjacentHTML('beforeend', `<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-sm">${skillName} (${level})</span>`);
+  });
+
   // render traits
   if (f['Personality Traits']?.length) {
     const traitsRes = await get(api(TRAIT_TABLE, `?filterByFormula=${encodeURIComponent(`OR(${f['Personality Traits'].map(id=>`RECORD_ID()='${id}'`).join(',')})`)}`));

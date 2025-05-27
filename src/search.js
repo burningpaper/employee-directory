@@ -46,9 +46,9 @@ function renderGrid(records) {
     .filter(r => {
       const f = r.fields;
       const nameMatch = (f['Employee Name']||'').toLowerCase().includes(term);
-      const skills  = f['Skills List']         || [];
+      const skills  = r.skillData || [];
       const clients = f['Client Experience']   || [];
-      const matchSkill    = !skillFilter.length  || skills.some(id => skillFilter.includes(id));
+      const matchSkill    = !skillFilter.length  || skills.some(s => skillFilter.includes(s.name));
       const matchClient   = !clientFilter.length || clients.some(id => clientFilter.includes(id));
       const matchIndustry = !industryFilter.length || clients.some(id => industryFilter.includes(clientIndustryMap[id]));
       const matchJob = !JOB_TITLE_FILTER || (f['Job Title']||'').toLowerCase().includes(JOB_TITLE_FILTER);
@@ -76,15 +76,53 @@ function renderGrid(records) {
 async function loadDirectory() {
   try {
     await loadAllClients();
-    let all = [], offset;
+
+    // Fetch employee records
+    let allEmployees = [], offset;
     do {
       const url = api('Employee Database', `?pageSize=100${offset ? `&offset=${offset}` : ''}`);
       const res = await getJSON(url);
-      all = all.concat(res.records);
+      allEmployees = allEmployees.concat(res.records);
       offset = res.offset;
     } while (offset);
-    EMPLOYEES = all.sort((a, b) => (a.fields['Employee Name'] || '').localeCompare(b.fields['Employee Name'] || ''));
+
+    // Fetch Employee Skills
+    let allSkills = [], skillOffset;
+    do {
+      const url = api('Employee Skills', `?pageSize=100${skillOffset ? `&offset=${skillOffset}` : ''}`);
+      const res = await getJSON(url);
+      allSkills = allSkills.concat(res.records);
+      skillOffset = res.offset;
+    } while (skillOffset);
+
+    // Fetch Skills lookup
+    const skillMap = {};
+    const skillRes = await getJSON(api('Skills', '?pageSize=100'));
+    skillRes.records.forEach(r => skillMap[r.id] = r.fields['Skill Name']);
+
+    // Map skills to employees
+    const skillsByEmployee = {};
+    allSkills.forEach(rec => {
+      const empId = rec.fields['Employee']?.[0];
+      const skillId = rec.fields['Skill']?.[0];
+      const level = rec.fields['Level'] || '';
+      if (!empId || !skillId) return;
+      const entry = { name: skillMap[skillId] || 'Unknown', level };
+      if (!skillsByEmployee[empId]) skillsByEmployee[empId] = [];
+      skillsByEmployee[empId].push(entry);
+    });
+
+    // Combine
+    EMPLOYEES = allEmployees.map(emp => {
+      emp.skillData = skillsByEmployee[emp.id] || [];
+      return emp;
+    }).sort((a, b) => (a.fields['Employee Name'] || '').localeCompare(b.fields['Employee Name'] || ''));
+
     renderGrid(EMPLOYEES);
+  } catch (e) {
+    console.error(e);
+    el('results').innerHTML = '<p class="text-center text-red-600">Error loading employees.</p>';
+  }
   } catch (e) {
     console.error(e);
     el('results').innerHTML = '<p class="text-center text-red-600">Error loading employees.</p>';
