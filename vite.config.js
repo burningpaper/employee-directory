@@ -1,16 +1,15 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  root: '.',
-  base: './',
+  root: './',
   build: {
     outDir: 'dist',
     rollupOptions: {
       input: {
-        main: 'index.html',
-        manager: 'manager.html',
-        profile: 'profile.html'
+        search: './search.html',
+        profile: './profile.html',
+        manager: './manager.html'
       }
     }
   }
-});
+})
