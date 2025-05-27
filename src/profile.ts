@@ -68,7 +68,7 @@ function openExperienceModal(){
     </div>
   `);
   el('mCancelExp').onclick = closeModal;
-  el('mSaveExp').onclick = async ()=>{
+  el('mSaveExp').onclick = async () => {
     const body={records:[{fields:{
       Company: el('expCompany').value,
       Role: el('expRole').value,
@@ -98,6 +98,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   el('emp-meta').textContent  = `${f.Department || ''}${f.Location ? ' • '+f.Location : ''}`;
   el('emp-bio').textContent   = f.Bio || '';
   el('emp-photo').src         = (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128';
+
   // render skills
   const formula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
   const esRes = await get(api('Skill Levels', `?filterByFormula=${formula}`));
@@ -119,30 +120,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     const traitsRes = await get(api(TRAIT_TABLE, `?filterByFormula=${encodeURIComponent(`OR(${f['Personality Traits'].map(id=>`RECORD_ID()='${id}'`).join(',')})`)}`));
     traitsRes.records.forEach(r => el('emp-traits').insertAdjacentHTML('beforeend', `<li class="text-sm text-gray-700">${r.fields['Trait Name']}</li>`));
   }
-   // render work experience
-   if (f['Work Experience']?.length) {
-    const expRes = await get(
-      api(EXP_TABLE,
-          `?filterByFormula=${encodeURIComponent(
-            `OR(${f['Work Experience']
-              .map(id => `RECORD_ID()='${id}'`)
-              .join(',')})`
-          )}`)
-    );
-    expRes.records.forEach(r => {
-      const ef = r.fields;
-      el('emp-experience').insertAdjacentHTML(
-        'beforeend',
-        `<div class="bg-white p-4 rounded-lg shadow-sm">
-           <h4 class="font-medium text-gray-900">${ef.Role || ''} · ${ef.Company || ''}</h4>
-           <p class="text-sm text-gray-500">${ef['Start Date']?.slice(0,7)} – ${ef['End Date']?.slice(0,7) || 'Present'}</p>
-           <p class="mt-2 text-gray-700 text-sm">${ef.Description || ''}</p>
-         </div>`
-      );
-    });
-  }
 
-    // render client experience
+  // render work experience (linked via Employee Code)
+  const expFormula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
+  const expRes = await get(api(EXP_TABLE, `?filterByFormula=${expFormula}`));
+  expRes.records.forEach(r => {
+    const ef = r.fields;
+    el('emp-experience').insertAdjacentHTML(
+      'beforeend',
+      `<div class="bg-white p-4 rounded-lg shadow-sm">
+         <h4 class="font-medium text-gray-900">${ef.Role || ''} · ${ef.Company || ''}</h4>
+         <p class="text-sm text-gray-500">${ef['Start Date']?.slice(0,7)} – ${ef['End Date']?.slice(0,7) || 'Present'}</p>
+         <p class="mt-2 text-gray-700 text-sm">${ef.Description || ''}</p>
+       </div>`
+    );
+  });
+
+  // render client experience
   if (f['Client Experience']?.length) {
     const clientRes = await get(
       api(CLIENT_TABLE,
@@ -170,7 +164,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-    // bind action buttons
+  // bind action buttons
   el('addExpBtn').onclick      = openExperienceModal;
   el('editClientBtn').onclick  = () => openClientModal(f['Client Experience'] || []);
   el('editSkillsBtn').onclick  = () => openSkillsModal(f['Skills List']      || []);
