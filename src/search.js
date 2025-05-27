@@ -41,16 +41,18 @@ function renderGrid(records) {
   const term = (el('quickSearch').value || '').trim().toLowerCase();
 
   container.innerHTML = '';
-  const filtered = records.filter(r => {
-    const f = r.fields;
-    const nameMatch = (f['Employee Name']||'').toLowerCase().includes(term);
-    const skills  = f['Skills List']         || [];
-    const clients = f['Client Experience']   || [];
-    const matchSkill    = !skillFilter.length  || skills.some(id => skillFilter.includes(id));
-    const matchClient   = !clientFilter.length || clients.some(id => clientFilter.includes(id));
-    const matchIndustry = !industryFilter.length || clients.some(id => industryFilter.includes(clientIndustryMap[id]));
-    return nameMatch && matchSkill && matchClient && matchIndustry;
-  });
+  const filtered = records
+    .filter(r => {
+      const f = r.fields;
+      const nameMatch = (f['Employee Name']||'').toLowerCase().includes(term);
+      const skills  = f['Skills List']         || [];
+      const clients = f['Client Experience']   || [];
+      const matchSkill    = !skillFilter.length  || skills.some(id => skillFilter.includes(id));
+      const matchClient   = !clientFilter.length || clients.some(id => clientFilter.includes(id));
+      const matchIndustry = !industryFilter.length || clients.some(id => industryFilter.includes(clientIndustryMap[id]));
+      return nameMatch && matchSkill && matchClient && matchIndustry;
+    })
+    .sort((a, b) => (a.fields['Employee Name'] || '').localeCompare(b.fields['Employee Name'] || ''));
 
   if (!filtered.length) {
     el('noResults').classList.remove('hidden');
@@ -72,8 +74,14 @@ function renderGrid(records) {
 async function loadDirectory() {
   try {
     await loadAllClients();
-    const empRes = await getJSON(api('Employee Database', '?pageSize=100'));
-    EMPLOYEES = empRes.records;
+    let all = [], offset;
+    do {
+      const url = api('Employee Database', `?pageSize=100${offset ? `&offset=${offset}` : ''}`);
+      const res = await getJSON(url);
+      all = all.concat(res.records);
+      offset = res.offset;
+    } while (offset);
+    EMPLOYEES = all.sort((a, b) => (a.fields['Employee Name'] || '').localeCompare(b.fields['Employee Name'] || ''));
     renderGrid(EMPLOYEES);
   } catch (e) {
     console.error(e);
