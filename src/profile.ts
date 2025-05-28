@@ -81,7 +81,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', content: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]' },
+              { type: 'text', content: `Extract ONLY the person's work experience from the attached LinkedIn screenshot. Format the result as raw JSON. DO NOT include commentary, just return: [{"company":"...","role":"...","start":"YYYY-MM","end":"YYYY-MM","description":"..."}]` },
               { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } }
             ]
           }
@@ -95,6 +95,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
 
     let parsed;
     try {
+      console.log('GPT raw output:', text);
       parsed = JSON.parse(text);
     } catch (e) {
       console.warn('OpenAI returned unparseable text:', text);
