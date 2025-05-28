@@ -75,7 +75,7 @@ function openExperienceModal(){
       'Start Date': el('expStart').value?new Date(el('expStart').value).toISOString():undefined,
       'End Date': el('expEnd').value?new Date(el('expEnd').value).toISOString():undefined,
       Description: el('expDesc').value,
-      'Employee Code': [REC_ID]
+      'Employee Code': EMP_CODE
     }}]};
     await post(EXP_TABLE, body);
     closeModal();location.reload();
@@ -121,7 +121,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     traitsRes.records.forEach(r => el('emp-traits').insertAdjacentHTML('beforeend', `<li class="text-sm text-gray-700">${r.fields['Trait Name']}</li>`));
   }
 
-  const expFormula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
+  const expFormula = encodeURIComponent(`{Employee Code}='${EMP_CODE}'`);
   const expRes = await get(api(EXP_TABLE, `?filterByFormula=${expFormula}`));
   expRes.records.forEach(r => {
     const ef = r.fields;
