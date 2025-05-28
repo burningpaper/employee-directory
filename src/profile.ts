@@ -34,6 +34,46 @@ el('modal')?.addEventListener('click', e => {
   if ((e.target as HTMLElement).id === 'modal') closeModal();
 });
 
+window.addEventListener('DOMContentLoaded', async () => {
+  const emp = await get(api(EMP_TABLE, '/' + REC_ID));
+  const f = emp.fields;
+  el('profileName').textContent = f['Full Name'] || '';
+  el('profileTitle').textContent = f['Title'] || '';
+  el('profileLocation').textContent = f['Location'] || '';
+  el('profileBlurb').textContent = f['Profile Blurb'] || '';
+  if (f['Profile Photo']?.[0]?.url) el('profilePhoto').src = f['Profile Photo'][0].url;
+
+  const skills = (f['Skills List'] || []).map((id: string) => f['Skills Linked']?.find((s: any) => s.id === id)?.fields['Skill Name']).filter(Boolean).join(', ');
+  el('skillsList').textContent = skills || 'None';
+
+  const traits = (f['Personality Traits'] || []).map((id: string) => f['Traits Linked']?.find((t: any) => t.id === id)?.fields['Trait Name']).filter(Boolean).join(', ');
+  el('traitList').textContent = traits || 'None';
+
+  const exp = await get(api(EXP_TABLE, `?filterByFormula=%7BEmployee%20Code%7D='${REC_ID}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`));
+  const expList = el('experienceList');
+  expList.innerHTML = '';
+  for (const e of exp.records) {
+    const d = e.fields;
+    const from = d['Start Date']?.split('T')[0] || '';
+    const to = d['End Date']?.split('T')[0] || 'Present';
+    const role = d['Role Title'] || 'Unknown';
+    const co = d['Company'] || 'Unknown';
+    const para = document.createElement('div');
+    para.innerHTML = `<strong>${role} · ${co}</strong><br><small>${from} – ${to}</small>`;
+    expList.appendChild(para);
+  }
+
+  const client = await get(api(CLIENT_TABLE, `?filterByFormula=%7BEmployee%20Code%7D='${REC_ID}'`));
+  const clientList = el('clientList');
+  clientList.innerHTML = '';
+  for (const c of client.records) {
+    const d = c.fields;
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${d['Client Name'] || ''}</td><td>${d['Industry'] || ''}</td><td>${d['Years Experience'] || ''}</td><td>${d['Last Year'] || ''}</td>`;
+    clientList.appendChild(row);
+  }
+});
+
 async function openSkillsModal(currentIDs: string[]) {
   const { records } = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name'));
   const rows = records.sort((a: any, b: any) => a.fields['Skill Name'].localeCompare(b.fields['Skill Name']));
@@ -81,7 +121,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', content: `Extract ONLY the person's work experience from the attached LinkedIn screenshot. Format the result as raw JSON. DO NOT include commentary, just return: [{"company":"...","role":"...","start":"YYYY-MM","end":"YYYY-MM","description":"..."}]` },
+              { type: 'text', content: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]' },
               { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } }
             ]
           }
@@ -95,7 +135,6 @@ el('processLinkedIn')?.addEventListener('click', async () => {
 
     let parsed;
     try {
-      console.log('GPT raw output:', text);
       parsed = JSON.parse(text);
     } catch (e) {
       console.warn('OpenAI returned unparseable text:', text);
