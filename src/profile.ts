@@ -100,7 +100,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   el('emp-photo').src         = (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128';
 
   // SKILLS FROM Skill Levels TABLE
-  const formula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
+  const formula = encodeURIComponent(`{Employee Code}='${EMP_CODE}'`);
   const esRes = await get(api('Skill Levels', `?filterByFormula=${formula}`));
   const skillIds = esRes.records.map(r => r.fields['Skill']?.[0]).filter(Boolean);
   let skillsMap = {};
