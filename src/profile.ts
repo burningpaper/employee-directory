@@ -88,18 +88,18 @@ let EMP_CODE = '';
 window.addEventListener('DOMContentLoaded', async () => {
   REC_ID = new URLSearchParams(location.search).get('id');
   if (!REC_ID) return;
-  // fetch employee
+
   const empRes = await get(api(EMP_TABLE, '/' + REC_ID));
   const f = empRes.fields;
   EMP_CODE = f['Employee Code'];
-  // render header
+
   el('emp-name').textContent  = f['Employee Name'] || '';
   el('emp-title').textContent = f['Job Title'] || '';
   el('emp-meta').textContent  = `${f.Department || ''}${f.Location ? ' • '+f.Location : ''}`;
   el('emp-bio').textContent   = f.Bio || '';
   el('emp-photo').src         = (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128';
 
-  // render skills
+  // SKILLS FROM Skill Levels TABLE
   const formula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
   const esRes = await get(api('Skill Levels', `?filterByFormula=${formula}`));
   const skillIds = esRes.records.map(r => r.fields['Skill']?.[0]).filter(Boolean);
@@ -115,13 +115,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     el('emp-skills').insertAdjacentHTML('beforeend', `<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-sm">${skillName} (${level})</span>`);
   });
 
-  // render traits
+  // traits
   if (f['Personality Traits']?.length) {
     const traitsRes = await get(api(TRAIT_TABLE, `?filterByFormula=${encodeURIComponent(`OR(${f['Personality Traits'].map(id=>`RECORD_ID()='${id}'`).join(',')})`)}`));
     traitsRes.records.forEach(r => el('emp-traits').insertAdjacentHTML('beforeend', `<li class="text-sm text-gray-700">${r.fields['Trait Name']}</li>`));
   }
 
-  // render work experience (linked via Employee Code)
   const expFormula = encodeURIComponent(`FIND('${REC_ID}', ARRAYJOIN({Employee Code}, '')) > 0`);
   const expRes = await get(api(EXP_TABLE, `?filterByFormula=${expFormula}`));
   expRes.records.forEach(r => {
@@ -136,7 +135,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     );
   });
 
-  // render client experience
   if (f['Client Experience']?.length) {
     const clientRes = await get(
       api(CLIENT_TABLE,
@@ -164,13 +162,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // bind action buttons
   el('addExpBtn').onclick      = openExperienceModal;
   el('editClientBtn').onclick  = () => openClientModal(f['Client Experience'] || []);
   el('editSkillsBtn').onclick  = () => openSkillsModal(f['Skills List']      || []);
   el('editTraitsBtn').onclick  = () => openTraitsModal(f['Personality Traits']|| []);
 
-  // quick search bar on profile page
   const qs = el('quickSearch');
   if (qs) qs.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
