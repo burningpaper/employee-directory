@@ -22,6 +22,7 @@ const EMP_TABLE = 'Employee Database';
 const SKILL_TABLE = 'Skills';
 const TRAIT_TABLE = 'Traits';
 const EXP_TABLE = 'Work Experience';
+const SKILL_LEVELS_TABLE = 'Skill Levels'; // <-- New table for skill proficiency
 const CLIENT_TABLE = 'Client Experience';
 
 function showModal(html: string) {
@@ -59,19 +60,56 @@ window.addEventListener('DOMContentLoaded', async () => {
     (el('emp-bio') as HTMLElement).textContent = f['Bio'] || f['Profile Blurb'] || '';
     if (f['Profile Photo']?.[0]?.url) (el('emp-photo') as HTMLImageElement).src = f['Profile Photo'][0].url;
 
-    // Assuming 'Skills List' contains linked record IDs and 'Skills Linked' is the lookup field name from Employee table
-    // This part might need adjustment based on your actual Airtable schema for displaying skills.
-    // The example below assumes f['Skills Linked'] is an array of skill objects if it's a lookup.
-    // If f['Skills List'] is just an array of names, simplify accordingly.
-    const skillNames = (f['Skills List'] || [])
-        .map((skillId: string) => {
-            // This logic depends on how 'Skills Linked' (or equivalent) is structured in your 'Employee Database' table
-            // If 'Skills Linked' is an array of IDs, you might need another fetch or use pre-fetched skill names.
-            // For simplicity, if 'Skills Linked' is an array of objects with 'fields.Skill Name':
-            const linkedSkill = f['Skills Linked']?.find((s: any) => s.id === skillId);
-            return linkedSkill?.fields['Skill Name'];
-        }).filter(Boolean).join(', ');
-    (el('emp-skills') as HTMLElement).textContent = skillNames || 'None listed'; // emp-skills is a div in profile.html
+    // --- Display Skills with Levels ---
+    // 1. Fetch all skills to create a Skill ID -> Skill Name map
+    const allSkillsResponse = await get(api(SKILL_TABLE, '?fields%5B%5D=Skill%20Name&pageSize=100')); // Adjust pageSize if you have >100 skills
+    const skillsMap = new Map<string, string>();
+    allSkillsResponse.records.forEach((skillRecord: any) => {
+      if (skillRecord.fields['Skill Name']) {
+        skillsMap.set(skillRecord.id, skillRecord.fields['Skill Name']);
+      }
+    });
+
+    // 2. Fetch Skill Level entries for the current employee
+    // Assumes 'Skill Levels' table has a field named 'Employee' linking to 'Employee Database'
+    // and a field 'Skill' linking to 'Skills' table, and a field 'Level' for proficiency.
+    const skillLevelsQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee}))`;
+    // You might want to add sorting here, e.g., &sort[0][field]=LookupSkillName&sort[0][direction]=asc
+    // if you have a lookup field for Skill Name in the 'Skill Levels' table.
+    const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
+
+    const skillsContainer = el('emp-skills') as HTMLElement;
+    if (skillsContainer) skillsContainer.innerHTML = ''; // Clear current content
+
+    const displayedSkillElements: string[] = [];
+    if (employeeSkillLevelsResponse?.records?.length > 0) {
+      for (const slRecord of employeeSkillLevelsResponse.records) {
+        const fields = slRecord.fields;
+        // Ensure 'Skill' is the correct field name in 'Skill Levels' linking to the 'Skills' table
+        const skillLinkArray = fields['Skill'] as string[]; // Expecting an array of Skill record IDs
+        // Ensure 'Level' is the correct field name in 'Skill Levels' for the proficiency
+        const level = fields['Level'] as string;
+
+        if (skillLinkArray && skillLinkArray.length > 0 && level) {
+          const skillId = skillLinkArray[0];
+          const skillName = skillsMap.get(skillId);
+          if (skillName) {
+            displayedSkillElements.push(`<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${skillName} (${level})</span>`);
+          }
+        }
+      }
+    }
+
+    if (skillsContainer) {
+      if (displayedSkillElements.length > 0) {
+        // Sort skills alphabetically before displaying
+        displayedSkillElements.sort((a, b) => a.localeCompare(b));
+        skillsContainer.innerHTML = displayedSkillElements.join(' ');
+      } else {
+        skillsContainer.textContent = 'No skills listed.';
+      }
+    }
+    // --- End Display Skills with Levels ---
 
     const traitNames = (f['Personality Traits'] || [])
         .map((traitId: string) => {
