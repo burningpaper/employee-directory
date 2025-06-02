@@ -81,7 +81,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Fetch Work Experience - Simplified filterByFormula
     // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
-    const workExpQuery = `?filterByFormula={Employee}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
+    // ❗ IMPORTANT: Replace {ActualLinkFieldName} with the real name of the field in your 'Work Experience' table that links to the 'Employee Database' table.
+    const workExpQuery = `?filterByFormula={ActualLinkFieldName}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
     const exp = await get(api(EXP_TABLE, workExpQuery));
     const expList = el('emp-experience'); // ID from profile.html
     if (expList) expList.innerHTML = '';
