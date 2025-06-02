@@ -83,10 +83,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
     // ❗ IMPORTANT: Replace {ActualLinkFieldName} with the real name of the field in your 'Work Experience' table that links to the 'Employee Database' table.
     // Example: If your linking field is named "Employee Link", use {Employee Link}
+
+    // --- DIAGNOSTIC: Fetch a few Work Experience records to inspect 'Employee Code' links ---
+    console.log("DIAGNOSTIC: Fetching first 5 Work Experience records to inspect 'Employee Code' links...");
+    const allWorkExpDiagnosticQuery = `?maxRecords=5`; // Fetches first 5 records from the default view
+    try {
+      const allExpData = await get(api(EXP_TABLE, allWorkExpDiagnosticQuery));
+      console.log('DIAGNOSTIC: Raw Work Experience Data (first 5 records):', JSON.parse(JSON.stringify(allExpData.records))); // Deep copy for logging
+      allExpData.records.forEach((expRecord: any, index: number) => {
+        console.log(`DIAGNOSTIC: Record ${index + 1} (ID: ${expRecord.id}):`);
+        if (expRecord.fields['Employee Code'] && Array.isArray(expRecord.fields['Employee Code'])) {
+          console.log(`  Linked 'Employee Code' IDs:`, expRecord.fields['Employee Code']);
+        } else {
+          console.log(`  'Employee Code' field is empty, not present, or not an array.`);
+        }
+      });
+    } catch (diagError) {
+      console.error("DIAGNOSTIC: Error fetching all work experience:", diagError);
+    }
+    // --- END DIAGNOSTIC ---
+
     console.log(`Fetching work experience for recordId: '${recordId}' (Type: ${typeof recordId})`); // Log the recordId and its type
     const workExpQuery = `?filterByFormula={Employee Code}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
     const exp = await get(api(EXP_TABLE, workExpQuery));
-    console.log('Work Experience API Response:', exp); // <--- ENSURE THIS LINE IS PRESENT
+    console.log('Work Experience API Response (filtered):', exp);
     const expList = el('emp-experience'); // ID from profile.html
     if (expList) expList.innerHTML = '';
     for (const e of exp.records) {
