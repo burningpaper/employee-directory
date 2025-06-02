@@ -127,7 +127,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       const d = e.fields;
       const from = d['Start Date']?.split('T')[0] || '';
       const to = d['End Date']?.split('T')[0] || 'Present';
-      const role = d['Role Title'] || 'Unknown';
+      const role = d['Role'] || 'Unknown';
       const co = d['Company'] || 'Unknown';
       const para = document.createElement('div');
       para.innerHTML = `<h4 class="font-medium text-gray-800">${role} at ${co}</h4><p class="text-xs text-gray-500">${from} – ${to}</p><p class="mt-1 text-sm text-gray-600">${d['Description']||''}</p>`;
