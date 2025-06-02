@@ -73,13 +73,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 2. Fetch Skill Level entries for the current employee
     // Assumes 'Skill Levels' table has a field named 'Employee' linking to 'Employee Database'
     // and a field 'Skill' linking to 'Skills' table, and a field 'Level' for proficiency.
+    // The field in 'Skill Levels' linking to 'Employee Database' is assumed to be 'Employee Code'
     const skillLevelsQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee Code}))`;
+    // based on previous fixes. We should search using readableEmployeeCode.
+    const readableEmployeeCode = f['Employee Code']; // Ensure this is the correct field for the readable code
+    console.log(`DIAGNOSTIC: readableEmployeeCode for Skill Levels query: '${readableEmployeeCode}'`);
+
+    let employeeSkillLevelsResponse = { records: [] };
+    if (readableEmployeeCode) {
+      const skillLevelsQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
     // You might want to add sorting here, e.g., &sort[0][field]=LookupSkillName&sort[0][direction]=asc
     // if you have a lookup field for Skill Name in the 'Skill Levels' table.
     const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
+      employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
+    } else {
+      console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter skill levels.`);
+    }
 
     const skillsContainer = el('emp-skills') as HTMLElement;
     if (skillsContainer) skillsContainer.innerHTML = ''; // Clear current content
+
 
     const displayedSkillElements: string[] = [];
     if (employeeSkillLevelsResponse?.records?.length > 0) {
