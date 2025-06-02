@@ -19,9 +19,6 @@ const TRAIT_TABLE = 'Traits';
 const EXP_TABLE = 'Work Experience';
 const CLIENT_TABLE = 'Client Experience';
 
-// Assume REC_ID is globally available
-declare const REC_ID: string;
-
 function showModal(html: string) {
   el('modalContent').innerHTML = html;
   el('modal').classList.remove('hidden');
@@ -35,46 +32,77 @@ el('modal')?.addEventListener('click', e => {
 });
 
 window.addEventListener('DOMContentLoaded', async () => {
-  const emp = await get(api(EMP_TABLE, '/' + REC_ID));
-  const f = emp.fields;
-  el('profileName').textContent = f['Full Name'] || '';
-  el('profileTitle').textContent = f['Title'] || '';
-  el('profileLocation').textContent = f['Location'] || '';
-  el('profileBlurb').textContent = f['Profile Blurb'] || '';
-  if (f['Profile Photo']?.[0]?.url) el('profilePhoto').src = f['Profile Photo'][0].url;
+  const recordId = new URLSearchParams(window.location.search).get('id');
 
-  const skills = (f['Skills List'] || []).map((id: string) => f['Skills Linked']?.find((s: any) => s.id === id)?.fields['Skill Name']).filter(Boolean).join(', ');
-  el('skillsList').textContent = skills || 'None';
-
-  const traits = (f['Personality Traits'] || []).map((id: string) => f['Traits Linked']?.find((t: any) => t.id === id)?.fields['Trait Name']).filter(Boolean).join(', ');
-  el('traitList').textContent = traits || 'None';
-
-  const exp = await get(api(EXP_TABLE, `?filterByFormula=%7BEmployee%20Code%7D='${REC_ID}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`));
-  const expList = el('experienceList');
-  expList.innerHTML = '';
-  for (const e of exp.records) {
-    const d = e.fields;
-    const from = d['Start Date']?.split('T')[0] || '';
-    const to = d['End Date']?.split('T')[0] || 'Present';
-    const role = d['Role Title'] || 'Unknown';
-    const co = d['Company'] || 'Unknown';
-    const para = document.createElement('div');
-    para.innerHTML = `<strong>${role} · ${co}</strong><br><small>${from} – ${to}</small>`;
-    expList.appendChild(para);
+  if (!recordId) {
+    console.error("Employee ID not found in URL.");
+    // Optionally, display an error message to the user in the UI
+    const profileNameEl = el('emp-name'); // Using ID from profile.html
+    if (profileNameEl) profileNameEl.textContent = "Employee not found.";
+    return;
   }
 
-  const client = await get(api(CLIENT_TABLE, `?filterByFormula=%7BEmployee%20Code%7D='${REC_ID}'`));
-  const clientList = el('clientList');
-  clientList.innerHTML = '';
-  for (const c of client.records) {
-    const d = c.fields;
-    const row = document.createElement('tr');
-    row.innerHTML = `<td>${d['Client Name'] || ''}</td><td>${d['Industry'] || ''}</td><td>${d['Years Experience'] || ''}</td><td>${d['Last Year'] || ''}</td>`;
-    clientList.appendChild(row);
+  try {
+    const emp = await get(api(EMP_TABLE, '/' + recordId));
+    const f = emp.fields;
+
+    // IDs from profile.html
+    (el('emp-name') as HTMLElement).textContent = f['Employee Name'] || f['Full Name'] || ''; // Adjusted to check common field names
+    (el('emp-title') as HTMLElement).textContent = f['Job Title'] || f['Title'] || '';
+    // el('profileLocation').textContent = f['Location'] || ''; // No direct match in profile.html, emp-meta is used
+    (el('emp-meta') as HTMLElement).textContent = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
+    (el('emp-bio') as HTMLElement).textContent = f['Bio'] || f['Profile Blurb'] || '';
+    if (f['Profile Photo']?.[0]?.url) (el('emp-photo') as HTMLImageElement).src = f['Profile Photo'][0].url;
+
+    // Assuming 'Skills List' contains linked record IDs and 'Skills Linked' is the lookup field name from Employee table
+    // This part might need adjustment based on your actual Airtable schema for displaying skills.
+    // The example below assumes f['Skills Linked'] is an array of skill objects if it's a lookup.
+    // If f['Skills List'] is just an array of names, simplify accordingly.
+    const skillNames = (f['Skills List'] || [])
+        .map((skillId: string) => {
+            // This logic depends on how 'Skills Linked' (or equivalent) is structured in your 'Employee Database' table
+            // If 'Skills Linked' is an array of IDs, you might need another fetch or use pre-fetched skill names.
+            // For simplicity, if 'Skills Linked' is an array of objects with 'fields.Skill Name':
+            const linkedSkill = f['Skills Linked']?.find((s: any) => s.id === skillId);
+            return linkedSkill?.fields['Skill Name'];
+        }).filter(Boolean).join(', ');
+    (el('emp-skills') as HTMLElement).textContent = skillNames || 'None listed'; // emp-skills is a div in profile.html
+
+    const traitNames = (f['Personality Traits'] || [])
+        .map((traitId: string) => {
+            const linkedTrait = f['Traits Linked']?.find((t: any) => t.id === traitId);
+            return linkedTrait?.fields['Trait Name'];
+        }).filter(Boolean).join(', ');
+    (el('emp-traits') as HTMLElement).textContent = traitNames || 'None listed'; // emp-traits is a ul in profile.html
+
+    const exp = await get(api(EXP_TABLE, `?filterByFormula=AND({Employee Code}='${recordId}', {Employee}='${recordId}')&sort[0][field]=Start%20Date&sort[0][direction]=desc`)); // Assuming Employee Code or Employee links to recordId
+    const expList = el('emp-experience'); // ID from profile.html
+    if (expList) expList.innerHTML = '';
+    for (const e of exp.records) {
+      const d = e.fields;
+      const from = d['Start Date']?.split('T')[0] || '';
+      const to = d['End Date']?.split('T')[0] || 'Present';
+      const role = d['Role Title'] || 'Unknown';
+      const co = d['Company'] || 'Unknown';
+      const para = document.createElement('div');
+      para.innerHTML = `<h4 class="font-medium text-gray-800">${role} at ${co}</h4><p class="text-xs text-gray-500">${from} – ${to}</p><p class="mt-1 text-sm text-gray-600">${d['Description']||''}</p>`;
+      expList?.appendChild(para);
+    }
+
+    // Add event listeners for edit buttons, passing the recordId
+    const currentSkillIDs = f['Skills List'] || [];
+    el('editSkillsBtn')?.addEventListener('click', () => openSkillsModal(currentSkillIDs, recordId));
+    const currentTraitIDs = f['Personality Traits'] || [];
+    el('editTraitsBtn')?.addEventListener('click', () => openTraitsModal(currentTraitIDs, recordId));
+
+  } catch (error) {
+    console.error("Error loading profile data:", error);
+    const profileNameEl = el('emp-name');
+    if (profileNameEl) profileNameEl.textContent = "Error loading profile.";
   }
 });
 
-async function openSkillsModal(currentIDs: string[]) {
+async function openSkillsModal(currentIDs: string[], recordId: string) {
   const { records } = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name'));
   const rows = records.sort((a: any, b: any) => a.fields['Skill Name'].localeCompare(b.fields['Skill Name']));
   const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="skillChk">${r.fields['Skill Name']}</label>`).join('<br>');
@@ -82,13 +110,13 @@ async function openSkillsModal(currentIDs: string[]) {
   el('mCancel').onclick = closeModal;
   el('mSave').onclick = async () => {
     const newIDs = [...document.querySelectorAll('.skillChk:checked')].map((c: any) => c.value);
-    await patch(EMP_TABLE, { records: [{ id: REC_ID, fields: { 'Skills List': newIDs } }] });
+    await patch(EMP_TABLE, { records: [{ id: recordId, fields: { 'Skills List': newIDs } }] });
     closeModal();
     location.reload();
   };
 }
 
-async function openTraitsModal(currentIDs: string[]) {
+async function openTraitsModal(currentIDs: string[], recordId: string) {
   const { records } = await get(api(TRAIT_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name'));
   const rows = records.sort((a: any, b: any) => a.fields['Trait Name'].localeCompare(b.fields['Trait Name']));
   const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="traitChk">${r.fields['Trait Name']}</label>`).join('<br>');
@@ -96,7 +124,7 @@ async function openTraitsModal(currentIDs: string[]) {
   el('mCancel').onclick = closeModal;
   el('mSave').onclick = async () => {
     const newIDs = [...document.querySelectorAll('.traitChk:checked')].map((c: any) => c.value);
-    await patch(EMP_TABLE, { records: [{ id: REC_ID, fields: { 'Personality Traits': newIDs } }] });
+    await patch(EMP_TABLE, { records: [{ id: recordId, fields: { 'Personality Traits': newIDs } }] });
     closeModal();
     location.reload();
   };
@@ -104,6 +132,13 @@ async function openTraitsModal(currentIDs: string[]) {
 
 el('processLinkedIn')?.addEventListener('click', async () => {
   const file = el('linkedinUpload')?.files?.[0];
+  const recordId = new URLSearchParams(window.location.search).get('id'); // Get recordId again or pass it if this function is called from a context where it's available
+
+  if (!recordId) {
+    alert('Employee ID not found. Cannot process LinkedIn data.');
+    return;
+  }
+
   if (!file) return alert('Upload a screenshot first.');
   const reader = new FileReader();
 
@@ -143,7 +178,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
 
     const records = parsed.map((item: any) => ({
       fields: {
-        'Employee Code': [REC_ID],
+        'Employee Code': [recordId], // Use the fetched recordId
         'Company': item.company,
         'Role Title': item.role,
         'Start Date': item.start ? new Date(item.start).toISOString() : null,
