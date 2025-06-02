@@ -18,6 +18,42 @@ const get = async (u: string) => {
 const post = (t: string, b: any) => fetch(api(t), { method: 'POST', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
 const patch = (t: string, b: any) => fetch(api(t), { method: 'PATCH', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
 
+async function createRecordsInBatches(tableName: string, records: Array<{ fields: any }>): Promise<any[]> {
+  if (records.length === 0) return [];
+  const allCreatedRecords: any[] = [];
+  for (let i = 0; i < records.length; i += 10) {
+    const chunk = records.slice(i, i + 10);
+    console.log(`Attempting to POST to ${tableName}, batch ${Math.floor(i/10) + 1}, ${chunk.length} records`);
+    const response = await post(tableName, { records: chunk });
+    // Assuming response.records contains the array of created records from Airtable
+    if (response.records && Array.isArray(response.records)) {
+        allCreatedRecords.push(...response.records);
+    } else if (response.error) {
+        console.error(`Error creating records in batch for ${tableName}:`, response.error);
+        throw new Error(`Airtable API Error (Batch Create): ${response.error.type} - ${response.error.message}`);
+    } else {
+        console.warn(`Unexpected response format during batch create for ${tableName}:`, response);
+        // If individual records in the response have IDs, try to collect them
+        if(Array.isArray(response)) allCreatedRecords.push(...response.filter(r => r.id));
+    }
+  }
+  return allCreatedRecords;
+}
+
+async function deleteRecordsInBatches(tableName: string, recordIds: string[]): Promise<void> {
+  if (recordIds.length === 0) return;
+  for (let i = 0; i < recordIds.length; i += 10) {
+    const chunk = recordIds.slice(i, i + 10);
+    const queryParams = chunk.map(id => `records[]=${encodeURIComponent(id)}`).join('&');
+    const url = api(tableName, `?${queryParams}`);
+    console.log('Attempting to DELETE URL:', url);
+    const r = await fetch(url, { method: 'DELETE', headers: HEADERS });
+    if (!r.ok) throw new Error(`Airtable API Error (Batch DELETE): ${r.status} ${await r.text()}`);
+    // Delete typically returns { records: [ { id: "...", deleted: true } ] } or similar
+    console.log(`Batch delete response for ${tableName}:`, await r.json());
+  }
+}
+
 const EMP_TABLE = 'Employee Database';
 const SKILL_TABLE = 'Skills';
 const TRAIT_TABLE = 'Traits';
@@ -246,8 +282,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Add event listeners for edit buttons, passing the recordId
-    const currentSkillIDs = f['Skills List'] || [];
-    el('editSkillsBtn')?.addEventListener('click', () => openSkillsModal(currentSkillIDs, recordId));
+    // For openSkillsModal, we pass employee's recordId and readableEmployeeCode
+    el('editSkillsBtn')?.addEventListener('click', () => openSkillsModal(recordId, readableEmployeeCode));
     const currentTraitIDs = f['Personality Traits'] || [];
     el('editTraitsBtn')?.addEventListener('click', () => openTraitsModal(currentTraitIDs, recordId));
 
@@ -258,25 +294,99 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-async function openSkillsModal(currentIDs: string[], recordId: string) {
-  const { records } = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name'));
-  // Records are already sorted by 'Skill Name' from the API query.
-  // If not, you could sort here:
-  // const rows = records.sort((a: any, b: any) => a.fields['Skill Name'].localeCompare(b.fields['Skill Name']));
-  const rows = records; // Assuming API sort is sufficient
-  const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="skillChk">${r.fields['Skill Name']}</label>`).join('<br>');
-  showModal(`<h2 class="text-lg font-semibold mb-4">Edit Skills</h2><div class="space-y-2 mb-6 max-h-60 overflow-y-auto">${opts}</div><div class="flex justify-end gap-2"><button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button><button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button></div>`);
+const SKILL_LEVEL_OPTIONS = ["", "Beginner", "Intermediate", "Advanced", "Expert"]; // "" for "None"
+
+async function openSkillsModal(employeeRecordId: string, readableEmployeeCode: string) {
+  // 1. Fetch all available skills
+  const allSkillsResponse = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name&sort%5B0%5D%5Bdirection%5D=asc'));
+  const allSkills = allSkillsResponse.records;
+
+  // 2. Fetch employee's current skill levels
+  let currentEmployeeSkillLevels = [];
+  const existingSkillLevelRecordsMap = new Map<string, { level: string, recordId: string }>(); // Maps Skill ID to its level and SkillLevel record ID
+
+  if (readableEmployeeCode) {
+    const skillLevelsQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
+    const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
+    currentEmployeeSkillLevels = employeeSkillLevelsResponse.records || [];
+
+    currentEmployeeSkillLevels.forEach((sl: any) => {
+      const skillId = sl.fields['Skill']?.[0]; // Assuming 'Skill' is a link and returns an array of IDs
+      const level = sl.fields['Level'];
+      if (skillId && level) {
+        existingSkillLevelRecordsMap.set(skillId, { level, recordId: sl.id });
+      }
+    });
+  }
+
+  // 3. Build modal HTML
+  let skillsHtml = '';
+  allSkills.forEach((skill: any) => {
+    const skillId = skill.id;
+    const skillName = skill.fields['Skill Name'];
+    const currentLevelData = existingSkillLevelRecordsMap.get(skillId);
+    const currentLevelValue = currentLevelData ? currentLevelData.level : "";
+
+    let levelOptionsHtml = SKILL_LEVEL_OPTIONS.map(levelOpt =>
+      `<option value="${levelOpt}" ${levelOpt === currentLevelValue ? 'selected' : ''}>${levelOpt || '--- None ---'}</option>`
+    ).join('');
+
+    skillsHtml += `
+      <div class="flex items-center justify-between py-2 border-b border-gray-200">
+        <span class="text-sm text-gray-700">${skillName}</span>
+        <select data-skill-id="${skillId}" class="skill-level-select border rounded px-2 py-1 text-sm">
+          ${levelOptionsHtml}
+        </select>
+      </div>
+    `;
+  });
+
+  showModal(
+    `<h2 class="text-lg font-semibold mb-4">Edit Skills & Levels</h2>
+     <div class="space-y-1 mb-6 max-h-96 overflow-y-auto">${skillsHtml}</div>
+     <div class="flex justify-end gap-2">
+       <button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
+       <button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button>
+     </div>`
+  );
+
   el('mCancel').onclick = closeModal;
   el('mSave').onclick = async () => {
-    const newIDs = [...document.querySelectorAll('.skillChk:checked')].map((c: any) => c.value);
-    await patch(EMP_TABLE, { records: [{ id: recordId, fields: { 'Skills List': newIDs } }] });
+    const skillLevelSelects = document.querySelectorAll('.skill-level-select');
+    const recordsToCreate: Array<{ fields: any }> = [];
+    skillLevelSelects.forEach(selectEl => {
+      const select = selectEl as HTMLSelectElement;
+      const skillId = select.dataset.skillId;
+      const level = select.value;
+      if (skillId && level) { // Only add if a level (not "None") is selected
+        recordsToCreate.push({
+          fields: {
+            "Skill": [skillId],
+            "Level": level,
+            "Employee Code": [employeeRecordId] // Link to the Employee Database record
+          }
+        });
+      }
+    });
+
+    // Delete all existing skill level records for this employee
+    const existingRecordIdsToDelete = Array.from(existingSkillLevelRecordsMap.values()).map(val => val.recordId);
+    if (existingRecordIdsToDelete.length > 0) {
+      await deleteRecordsInBatches(SKILL_LEVELS_TABLE, existingRecordIdsToDelete);
+    }
+
+    // Create new skill level records
+    if (recordsToCreate.length > 0) {
+      await createRecordsInBatches(SKILL_LEVELS_TABLE, recordsToCreate);
+    }
+
     closeModal();
     location.reload();
   };
 }
 
 async function openTraitsModal(currentIDs: string[], recordId: string) {
-  const { records } = await get(api(TRAIT_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name'));
+  const { records } = await get(api(TRAIT_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name&sort%5B0%5D%5Bdirection%5D=asc'));
   // Records are already sorted by 'Trait Name' from the API query.
   // If not, you could sort here:
   // const rows = records.sort((a: any, b: any) => a.fields['Trait Name'].localeCompare(b.fields['Trait Name']));
