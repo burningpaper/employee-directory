@@ -83,7 +83,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
     // ❗ IMPORTANT: Replace {ActualLinkFieldName} with the real name of the field in your 'Work Experience' table that links to the 'Employee Database' table.
     // Example: If your linking field is named "Employee Link", use {Employee Link}
-    const workExpQuery = `?filterByFormula={Employee Database}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
+    const workExpQuery = `?filterByFormula={Employee Code}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
     const exp = await get(api(EXP_TABLE, workExpQuery));
     const expList = el('emp-experience'); // ID from profile.html
     if (expList) expList.innerHTML = '';
