@@ -9,7 +9,11 @@ const HEADERS = {
   'Content-Type': 'application/json'
 };
 const api = (tbl: string, q = '') => `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tbl)}${q}`;
-const get = (u: string) => fetch(u, { headers: HEADERS }).then(r => r.json());
+const get = async (u: string) => {
+  const r = await fetch(u, { headers: HEADERS });
+  if (!r.ok) throw new Error(`Airtable API Error: ${r.status} ${await r.text()}`);
+  return r.json();
+};
 const post = (t: string, b: any) => fetch(api(t), { method: 'POST', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
 const patch = (t: string, b: any) => fetch(api(t), { method: 'PATCH', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -75,7 +79,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         }).filter(Boolean).join(', ');
     (el('emp-traits') as HTMLElement).textContent = traitNames || 'None listed'; // emp-traits is a ul in profile.html
 
-    const exp = await get(api(EXP_TABLE, `?filterByFormula=AND({Employee Code}='${recordId}', {Employee}='${recordId}')&sort[0][field]=Start%20Date&sort[0][direction]=desc`)); // Assuming Employee Code or Employee links to recordId
+    // Fetch Work Experience - Simplified filterByFormula
+    // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
+    const workExpQuery = `?filterByFormula={Employee}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
+    const exp = await get(api(EXP_TABLE, workExpQuery));
     const expList = el('emp-experience'); // ID from profile.html
     if (expList) expList.innerHTML = '';
     for (const e of exp.records) {
