@@ -106,8 +106,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     console.log(`Fetching work experience for recordId: '${recordId}' (Type: ${typeof recordId})`); // Log the recordId and its type
     // Simplified query: Removed sort parameters to isolate the filterByFormula
-    // Using CONTAINS for a more robust check with linked records
-    const workExpQuery = `?filterByFormula=CONTAINS({Employee Code}, '${recordId}')`;
+    // Using FIND and ARRAYJOIN for checking if a linked record ID is present
+    const workExpQuery = `?filterByFormula=FIND('${recordId}', ARRAYJOIN({Employee Code}))`;
     const exp = await get(api(EXP_TABLE, workExpQuery));
     console.log('Work Experience API Response (filtered):', exp);
     const expList = el('emp-experience'); // ID from profile.html
