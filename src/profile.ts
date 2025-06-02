@@ -104,11 +104,22 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     // --- END DIAGNOSTIC ---
 
-    console.log(`Fetching work experience for recordId: '${recordId}' (Type: ${typeof recordId})`); // Log the recordId and its type
-    // Simplified query: Removed sort parameters to isolate the filterByFormula
-    // Using SEARCH and ARRAYJOIN for checking if a linked record ID is present
-    const workExpQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee Code}))`;
-    const exp = await get(api(EXP_TABLE, workExpQuery));
+    // Get the human-readable employee code from the fetched employee data (f)
+    // ❗ IMPORTANT: Replace 'Employee String Code' with the actual field name from your 'Employee Database' table
+    // that holds the human-readable employee code (e.g., _2CIN001). This might be the primary field.
+    const readableEmployeeCode = f['Employee String Code']; // Or f['Employee Code'], f['Employee ID'], etc.
+
+    let exp = { records: [] }; // Default to empty records
+
+    if (readableEmployeeCode) {
+      console.log(`Fetching work experience for readableEmployeeCode: '${readableEmployeeCode}' (from recordId: '${recordId}')`);
+      // Filter by searching for the readableEmployeeCode within the ARRAYJOIN'ed primary field values of linked Employee Code records
+      const workExpQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
+      exp = await get(api(EXP_TABLE, workExpQuery));
+    } else {
+      console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter work experience by it.`);
+    }
+
     console.log('Work Experience API Response (filtered):', exp);
     const expList = el('emp-experience'); // ID from profile.html
     if (expList) expList.innerHTML = '';
