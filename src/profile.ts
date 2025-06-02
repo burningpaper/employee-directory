@@ -142,7 +142,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       // The Airtable error "Unknown field name: "Last Year"" means the field specified for sorting
       // doesn't match a field name in your 'Client Experience' table.
       // Please verify the correct field name in your Airtable base and update it below.
-      const clientExpQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Database}))&sort[0][field]={Year Last Worked}&sort[0][direction]=desc`;
+      const clientExpQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Database}))&sort[0][field]=Year Last Worked&sort[0][direction]=desc`;
       clientExp = await get(api(CLIENT_TABLE, clientExpQuery));
     } else {
       console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter client experience.`);
