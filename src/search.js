@@ -23,6 +23,8 @@ let clientIndustryMap = {};  // client ID -> industry
 
 // 🔄 Fetch JSON
 async function getJSON(url) {
+  console.log("Attempting to fetch URL:", url); // <--- ADDED THIS LINE
+  console.log("Type of URL variable:", typeof url); // <--- AND THIS LINE
   const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
