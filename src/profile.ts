@@ -125,12 +125,45 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     // --- End Display Skills with Levels ---
 
-    const traitNames = (f['Personality Traits'] || [])
-        .map((traitId: string) => {
-            const linkedTrait = f['Traits Linked']?.find((t: any) => t.id === traitId);
-            return linkedTrait?.fields['Trait Name'];
-        }).filter(Boolean).join(', ');
-    (el('emp-traits') as HTMLElement).textContent = traitNames || 'None listed'; // emp-traits is a ul in profile.html
+    // --- Display Personality Traits ---
+    // 1. Fetch all traits to create a Trait ID -> Trait Name map
+    // This assumes your 'Traits' table has a field named 'Trait Name'.
+    const allTraitsResponse = await get(api(TRAIT_TABLE, '?fields%5B%5D=Trait%20Name&pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name&sort%5B0%5D%5Bdirection%5D=asc')); // Adjust pageSize if you have >100 traits
+    const traitsMap = new Map<string, string>();
+    allTraitsResponse.records.forEach((traitRecord: any) => {
+      if (traitRecord.fields['Trait Name']) {
+        traitsMap.set(traitRecord.id, traitRecord.fields['Trait Name']);
+      }
+    });
+
+    // 2. Get trait IDs from the employee record.
+    // This assumes the field in 'Employee Database' linking to 'Traits' is 'Personality Traits'.
+    const employeeTraitIDs = f['Personality Traits'] as string[] || [];
+
+    const traitsList = el('emp-traits') as HTMLUListElement; // Assuming it's a UL based on comment
+    if (traitsList) {
+      traitsList.innerHTML = ''; // Clear existing content
+      const displayedTraitNames: string[] = [];
+
+      if (employeeTraitIDs.length > 0) {
+        employeeTraitIDs.forEach((traitId: string) => {
+          const traitName = traitsMap.get(traitId);
+          if (traitName) {
+            displayedTraitNames.push(traitName);
+          }
+        });
+      }
+
+      if (displayedTraitNames.length > 0) {
+        // Names are already sorted from the API call, but if not, you could sort here: displayedTraitNames.sort();
+        displayedTraitNames.forEach((name: string) => {
+          traitsList.innerHTML += `<li class="text-sm text-gray-600">${name}</li>`;
+        });
+      } else {
+        traitsList.innerHTML = '<li class="text-sm text-gray-600">None listed</li>';
+      }
+    }
+    // --- End Display Personality Traits ---
 
     // Fetch Work Experience - Simplified filterByFormula
     // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
@@ -227,7 +260,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 async function openSkillsModal(currentIDs: string[], recordId: string) {
   const { records } = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name'));
-  const rows = records.sort((a: any, b: any) => a.fields['Skill Name'].localeCompare(b.fields['Skill Name']));
+  // Records are already sorted by 'Skill Name' from the API query.
+  // If not, you could sort here:
+  // const rows = records.sort((a: any, b: any) => a.fields['Skill Name'].localeCompare(b.fields['Skill Name']));
+  const rows = records; // Assuming API sort is sufficient
   const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="skillChk">${r.fields['Skill Name']}</label>`).join('<br>');
   showModal(`<h2 class="text-lg font-semibold mb-4">Edit Skills</h2><div class="space-y-2 mb-6 max-h-60 overflow-y-auto">${opts}</div><div class="flex justify-end gap-2"><button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button><button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button></div>`);
   el('mCancel').onclick = closeModal;
@@ -241,7 +277,10 @@ async function openSkillsModal(currentIDs: string[], recordId: string) {
 
 async function openTraitsModal(currentIDs: string[], recordId: string) {
   const { records } = await get(api(TRAIT_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name'));
-  const rows = records.sort((a: any, b: any) => a.fields['Trait Name'].localeCompare(b.fields['Trait Name']));
+  // Records are already sorted by 'Trait Name' from the API query.
+  // If not, you could sort here:
+  // const rows = records.sort((a: any, b: any) => a.fields['Trait Name'].localeCompare(b.fields['Trait Name']));
+  const rows = records; // Assuming API sort is sufficient
   const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="traitChk">${r.fields['Trait Name']}</label>`).join('<br>');
   showModal(`<h2 class="text-lg font-semibold mb-4">Edit Personality Traits</h2><div class="space-y-2 mb-6 max-h-60 overflow-y-auto">${opts}</div><div class="flex justify-end gap-2"><button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button><button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button></div>`);
   el('mCancel').onclick = closeModal;
