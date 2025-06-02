@@ -107,7 +107,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Get the human-readable employee code from the fetched employee data (f)
     // ❗ IMPORTANT: Replace 'Employee String Code' with the actual field name from your 'Employee Database' table
     // that holds the human-readable employee code (e.g., _2CIN001). This might be the primary field.
-    const readableEmployeeCode = f['Employee String Code']; // Or f['Employee Code'], f['Employee ID'], etc.
+    const readableEmployeeCode = f['Employee Code']; // Or f['Employee Code'], f['Employee ID'], etc.
 
     let exp = { records: [] }; // Default to empty records
 
