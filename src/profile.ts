@@ -10,7 +10,7 @@ const HEADERS = {
 };
 const api = (tbl: string, q = '') => `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tbl)}${q}`;
 const get = async (u: string) => {
-  const r = await fetch(u, { headers: HEADERS });
+  const r = await fetch(u, { headers: HEADERS, cache: 'no-store' }); // Added cache: 'no-store'
   if (!r.ok) throw new Error(`Airtable API Error: ${r.status} ${await r.text()}`);
   return r.json();
 };
@@ -83,6 +83,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
     // ❗ IMPORTANT: Replace {ActualLinkFieldName} with the real name of the field in your 'Work Experience' table that links to the 'Employee Database' table.
     // Example: If your linking field is named "Employee Link", use {Employee Link}
+    console.log(`Fetching work experience for recordId: '${recordId}' (Type: ${typeof recordId})`); // Log the recordId and its type
     const workExpQuery = `?filterByFormula={Employee Code}='${recordId}'&sort[0][field]=Start%20Date&sort[0][direction]=desc`;
     const exp = await get(api(EXP_TABLE, workExpQuery));
     console.log('Work Experience API Response:', exp); // <--- ENSURE THIS LINE IS PRESENT
