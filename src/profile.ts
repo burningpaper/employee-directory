@@ -294,7 +294,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-const SKILL_LEVEL_OPTIONS = ["", "Beginner", "Intermediate", "Advanced", "Expert"]; // "" for "None"
+const SKILL_LEVEL_OPTIONS = ["", "Basic", "Average", "Good", "Excellent"]; // "" for "None"
 
 async function openSkillsModal(employeeRecordId: string, readableEmployeeCode: string) {
   // 1. Fetch all available skills
