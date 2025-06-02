@@ -55,6 +55,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     // IDs from profile.html
     (el('emp-name') as HTMLElement).textContent = f['Employee Name'] || f['Full Name'] || ''; // Adjusted to check common field names
     (el('emp-title') as HTMLElement).textContent = f['Job Title'] || f['Title'] || '';
+    // Define readableEmployeeCode once, as it's used by multiple sections
+    // Ensure 'Employee Code' is the correct field name from your 'Employee Database' table
+    // that holds the human-readable employee code (e.g., _2CIN001).
+    const readableEmployeeCode = f['Employee Code'];
     // el('profileLocation').textContent = f['Location'] || ''; // No direct match in profile.html, emp-meta is used
     (el('emp-meta') as HTMLElement).textContent = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
     (el('emp-bio') as HTMLElement).textContent = f['Bio'] || f['Profile Blurb'] || '';
@@ -74,9 +78,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Assumes 'Skill Levels' table has a field named 'Employee' linking to 'Employee Database'
     // and a field 'Skill' linking to 'Skills' table, and a field 'Level' for proficiency.
     // The field in 'Skill Levels' linking to 'Employee Database' is assumed to be 'Employee Code'
-    const skillLevelsQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee Code}))`;
     // based on previous fixes. We should search using readableEmployeeCode.
-    const readableEmployeeCode = f['Employee Code']; // Ensure this is the correct field for the readable code
     console.log(`DIAGNOSTIC: readableEmployeeCode for Skill Levels query: '${readableEmployeeCode}'`);
 
     let employeeSkillLevelsResponse = { records: [] };
@@ -84,7 +86,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       const skillLevelsQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
     // You might want to add sorting here, e.g., &sort[0][field]=LookupSkillName&sort[0][direction]=asc
     // if you have a lookup field for Skill Name in the 'Skill Levels' table.
-    const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
       employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
     } else {
       console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter skill levels.`);
@@ -155,10 +156,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     // --- END DIAGNOSTIC ---
 
-    // Get the human-readable employee code from the fetched employee data (f)
-    // ❗ IMPORTANT: Replace 'Employee String Code' with the actual field name from your 'Employee Database' table
-    // that holds the human-readable employee code (e.g., _2CIN001). This might be the primary field.
-    const readableEmployeeCode = f['Employee Code']; // Or f['Employee Code'], f['Employee ID'], etc.
 
     let exp = { records: [] }; // Default to empty records
 
