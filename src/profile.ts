@@ -10,6 +10,7 @@ const HEADERS = {
 };
 const api = (tbl: string, q = '') => `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tbl)}${q}`;
 const get = async (u: string) => {
+  console.log('Attempting to GET URL:', u); // <--- ADD THIS LINE
   const r = await fetch(u, { headers: HEADERS, cache: 'no-store' }); // Added cache: 'no-store'
   if (!r.ok) throw new Error(`Airtable API Error: ${r.status} ${await r.text()}`);
   return r.json();
