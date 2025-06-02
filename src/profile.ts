@@ -73,7 +73,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 2. Fetch Skill Level entries for the current employee
     // Assumes 'Skill Levels' table has a field named 'Employee' linking to 'Employee Database'
     // and a field 'Skill' linking to 'Skills' table, and a field 'Level' for proficiency.
-    const skillLevelsQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee}))`;
+    const skillLevelsQuery = `?filterByFormula=SEARCH('${recordId}', ARRAYJOIN({Employee Database}))`;
     // You might want to add sorting here, e.g., &sort[0][field]=LookupSkillName&sort[0][direction]=asc
     // if you have a lookup field for Skill Name in the 'Skill Levels' table.
     const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
