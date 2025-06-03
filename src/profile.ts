@@ -1,9 +1,14 @@
 // src/profile.ts – Full version with LinkedIn image processing and Airtable integration
 const $ = (sel: string) => document.querySelector(sel);
-const el = (id: string) => document.getElementById(id) as HTMLInputElement;
+// Refined 'el' function for better type safety.
+// It now returns HTMLElement | null, and specific usages should cast if necessary.
+const el = (id: string): HTMLElement | null => document.getElementById(id);
 
 const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID.trim();
 const TOKEN = import.meta.env.VITE_AIRTABLE_PAT.trim();
+const OPENAI_KEY = import.meta.env.VITE_OPENAI_KEY?.trim(); // Get OpenAI Key
+
+
 const HEADERS = {
   Authorization: `Bearer ${TOKEN}`,
   'Content-Type': 'application/json'
@@ -63,11 +68,11 @@ const CLIENT_TABLE = 'Client Experience';
 
 function showModal(html: string) {
   el('modalContent').innerHTML = html;
-  el('modal').classList.remove('hidden');
+  el('modal')?.classList.remove('hidden');
 }
 function closeModal() {
-  el('modal').classList.add('hidden');
-  el('modalContent').innerHTML = '';
+  el('modal')?.classList.add('hidden');
+  el('modalContent')!.innerHTML = ''; // Assuming modalContent always exists when this is called
 }
 el('modal')?.addEventListener('click', e => {
   if ((e.target as HTMLElement).id === 'modal') closeModal();
@@ -79,7 +84,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (!recordId) {
     console.error("Employee ID not found in URL.");
     // Optionally, display an error message to the user in the UI
-    const profileNameEl = el('emp-name'); // Using ID from profile.html
+    const profileNameEl = el('emp-name');
     if (profileNameEl) profileNameEl.textContent = "Employee not found.";
     return;
   }
@@ -89,15 +94,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     const f = emp.fields;
 
     // IDs from profile.html
-    (el('emp-name') as HTMLElement).textContent = f['Employee Name'] || f['Full Name'] || ''; // Adjusted to check common field names
-    (el('emp-title') as HTMLElement).textContent = f['Job Title'] || f['Title'] || '';
+    el('emp-name')!.textContent = f['Employee Name'] || f['Full Name'] || ''; // Adjusted to check common field names
+    el('emp-title')!.textContent = f['Job Title'] || f['Title'] || '';
     // Define readableEmployeeCode once, as it's used by multiple sections
     // Ensure 'Employee Code' is the correct field name from your 'Employee Database' table
     // that holds the human-readable employee code (e.g., _2CIN001).
     const readableEmployeeCode = f['Employee Code'];
     // el('profileLocation').textContent = f['Location'] || ''; // No direct match in profile.html, emp-meta is used
-    (el('emp-meta') as HTMLElement).textContent = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
-    (el('emp-bio') as HTMLElement).textContent = f['Bio'] || f['Profile Blurb'] || '';
+    el('emp-meta')!.textContent = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
+    el('emp-bio')!.textContent = f['Bio'] || f['Profile Blurb'] || '';
     if (f['Profile Photo']?.[0]?.url) (el('emp-photo') as HTMLImageElement).src = f['Profile Photo'][0].url;
 
     // --- Display Skills with Levels ---
@@ -127,7 +132,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter skill levels.`);
     }
 
-    const skillsContainer = el('emp-skills') as HTMLElement;
+    const skillsContainer = el('emp-skills');
     if (skillsContainer) skillsContainer.innerHTML = ''; // Clear current content
 
 
@@ -176,7 +181,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // This assumes the field in 'Employee Database' linking to 'Traits' is 'Personality Traits'.
     const employeeTraitIDs = f['Personality Traits'] as string[] || [];
 
-    const traitsList = el('emp-traits') as HTMLUListElement; // Assuming it's a UL based on comment
+    const traitsList = el('emp-traits') as HTMLUListElement | null; // Assuming it's a UL based on comment
     if (traitsList) {
       traitsList.innerHTML = ''; // Clear existing content
       const displayedTraitNames: string[] = [];
@@ -238,7 +243,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     console.log('Work Experience API Response (filtered):', exp);
-    const expList = el('emp-experience'); // ID from profile.html
+    const expList = el('emp-experience');
     if (expList) expList.innerHTML = '';
     for (const e of exp.records) {
       const d = e.fields;
@@ -266,7 +271,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     console.log('Client Experience API Response (filtered):', clientExp);
-    const clientListBody = el('emp-clients'); // tbody ID from profile.html
+    const clientListBody = el('emp-clients');
     if (clientListBody) clientListBody.innerHTML = ''; // Clear previous entries
 
     for (const ce of clientExp.records) {
@@ -289,7 +294,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   } catch (error) {
     console.error("Error loading profile data:", error);
-    const profileNameEl = el('emp-name');
+    const profileNameEl = el('emp-name') ;
     if (profileNameEl) profileNameEl.textContent = "Error loading profile.";
   }
 });
@@ -350,11 +355,11 @@ async function openSkillsModal(employeeRecordId: string, readableEmployeeCode: s
      </div>`
   );
 
-  el('mCancel').onclick = closeModal;
-  el('mSave').onclick = async () => {
+  el('mCancel')!.onclick = closeModal;
+  el('mSave')!.onclick = async () => {
     const skillLevelSelects = document.querySelectorAll('.skill-level-select');
     const recordsToCreate: Array<{ fields: any }> = [];
-    skillLevelSelects.forEach(selectEl => {
+    skillLevelSelects.forEach(selectEl => { // NodeListOf<Element>
       const select = selectEl as HTMLSelectElement;
       const skillId = select.dataset.skillId;
       const level = select.value;
@@ -393,19 +398,25 @@ async function openTraitsModal(currentIDs: string[], recordId: string) {
   const rows = records; // Assuming API sort is sufficient
   const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="traitChk">${r.fields['Trait Name']}</label>`).join('<br>');
   showModal(`<h2 class="text-lg font-semibold mb-4">Edit Personality Traits</h2><div class="space-y-2 mb-6 max-h-60 overflow-y-auto">${opts}</div><div class="flex justify-end gap-2"><button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button><button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button></div>`);
-  el('mCancel').onclick = closeModal;
-  el('mSave').onclick = async () => {
+  el('mCancel')!.onclick = closeModal;
+  el('mSave')!.onclick = async () => {
     const newIDs = [...document.querySelectorAll('.traitChk:checked')].map((c: any) => c.value);
     await patch(EMP_TABLE, { records: [{ id: recordId, fields: { 'Personality Traits': newIDs } }] });
     closeModal();
     location.reload();
   };
 }
-
 el('processLinkedIn')?.addEventListener('click', async () => {
-  const file = el('linkedinUpload')?.files?.[0];
-  const recordId = new URLSearchParams(window.location.search).get('id'); // Get recordId again or pass it if this function is called from a context where it's available
+  if (!OPENAI_KEY) {
+    console.error("OpenAI API Key (VITE_OPENAI_KEY) is not set in environment variables.");
+    alert("OpenAI API Key is not configured. LinkedIn import feature is disabled.");
+    el('linkedInOutput')!.textContent = "OpenAI API Key not configured.";
+    return;
+  }
 
+  const fileInput = el('linkedinUpload') as HTMLInputElement | null;
+  const file = fileInput?.files?.[0];
+  const recordId = new URLSearchParams(window.location.search).get('id'); // Get recordId again or pass it if this function is called from a context where it's available
   if (!recordId) {
     alert('Employee ID not found. Cannot process LinkedIn data.');
     return;
@@ -419,7 +430,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_OPENAI_KEY}`,
+        Authorization: `Bearer ${OPENAI_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -436,18 +447,35 @@ el('processLinkedIn')?.addEventListener('click', async () => {
       })
     });
 
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('OpenAI API Error Details:', {
+        status: res.status,
+        statusText: res.statusText,
+        body: errorBody,
+      });
+      el('linkedInOutput')!.textContent = `Error with OpenAI API: ${res.status} ${res.statusText}. Check console for details.`;
+      try {
+        const errorJson = JSON.parse(errorBody);
+        if (errorJson.error && errorJson.error.message) {
+          el('linkedInOutput')!.textContent = `OpenAI Error: ${errorJson.error.message}`;
+        }
+      } catch (e) { /* Already logged raw text */ }
+      return;
+    }
+
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || 'No result.';
-    el('linkedInOutput').textContent = text;
+    el('linkedInOutput')!.textContent = text;
 
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch (e) {
       console.warn('OpenAI returned unparseable text:', text);
-      return alert('Could not parse response. Check the raw result above.');
+      alert('Could not parse response from OpenAI. Check the raw result in the text area.');
+      return;
     }
-
     const records = parsed.map((item: any) => ({
       fields: {
         'Employee Code': [recordId], // Use the fetched recordId
