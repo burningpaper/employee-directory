@@ -481,12 +481,7 @@ processLinkedInButton?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Carefully extract all work experience entries from the provided LinkedIn profile screenshot. ' +
-                                     'For each entry, identify the company name, the exact job title or role held, the start date, ' +
-                                     'the end date (or "Present" if currently employed there), and a brief description of responsibilities if available. ' +
-                                     'Pay close attention to accurately capturing the job titles. ' +
-                                     'Return the data as a JSON array, where each object has the keys: "company", "role", "start", "end", and "description". ' +
-                                     'For example: [{company: "Example Corp", role: "Senior Software Engineer", start: "Jan 2020", end: "Present", description: "Led a team to develop new features."}]' 
+              { type: 'text', text: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]'
               },
               { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
             ]
