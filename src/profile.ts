@@ -470,14 +470,24 @@ el('processLinkedIn')?.addEventListener('click', async () => {
     }
 
     const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || 'No result.';
-    el('linkedInOutput')!.textContent = text;
+    const rawGptResponse = data.choices?.[0]?.message?.content || 'No result.';
+    el('linkedInOutput')!.textContent = rawGptResponse;
+
+    // Clean the response: remove potential markdown code block fences
+    let jsonStringToParse = rawGptResponse.trim();
+    if (jsonStringToParse.startsWith("```json") && jsonStringToParse.endsWith("```")) {
+      jsonStringToParse = jsonStringToParse.substring(7, jsonStringToParse.length - 3).trim();
+    } else if (jsonStringToParse.startsWith("```") && jsonStringToParse.endsWith("```")) {
+      // Handle generic ``` ``` case if ```json is not present but other language tag might be
+      jsonStringToParse = jsonStringToParse.substring(3, jsonStringToParse.length - 3).trim();
+    }
 
     let parsed;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(jsonStringToParse);
     } catch (e) {
-      console.warn('OpenAI returned unparseable text:', text);
+      console.warn('OpenAI response was not parseable as JSON even after cleaning attempts. Raw response:', rawGptResponse, 'Attempted to parse:', jsonStringToParse);
+      console.error('JSON Parsing Error:', e); // Log the actual error
       alert('Could not parse response from OpenAI. Check the raw result in the text area.');
       return;
     }
