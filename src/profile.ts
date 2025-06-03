@@ -481,7 +481,7 @@ processLinkedInButton?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]'
+              { type: 'text', text: 'Extract work experience from this Linked-in screenshot. The work experience appears in a section of the page called "Experience" only. Return JSON like: [{company, role, start, end, description}]. Ignore everyting else on the page'},
               },
               { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
             ]
