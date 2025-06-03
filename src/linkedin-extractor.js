@@ -24,9 +24,10 @@ export async function extractWorkExperienceFromImage(base64Image) {
 Instructions:
 - Parse the text carefully and extract only confirmed work experience entries.
 - Each job should include:
-  - Company name (as it appears)
-  - Job title
-  - Start and end dates (if visible)
+  - Company (exact name as shown)
+  - Role (job title)
+  - Start Date (if visible)
+  - End Date (if visible)
   - Description (if available)
 - Do not include any companies or roles that are not explicitly listed.
 - Do not fabricate job entries based on assumptions.
@@ -35,11 +36,11 @@ Instructions:
 Format your response as:
 [
   {
-    "company": "Company Name",
-    "title": "Job Title",
-    "start": "Start Date",
-    "end": "End Date",
-    "description": "Description"
+    "Company": "Company Name",
+    "Role": "Job Title",
+    "Start Date": "Start Date",
+    "End Date": "End Date",
+    "Description": "Description"
   },
   ...
 ]`
@@ -63,7 +64,6 @@ Format your response as:
       statusText: response.statusText,
       body: errorBody,
     });
-    // Try to parse the error body as JSON for a more specific message
     try {
       const errorJson = JSON.parse(errorBody);
       if (errorJson.error && errorJson.error.message) {
@@ -78,24 +78,20 @@ Format your response as:
 
   if (typeof content === 'string') {
     try {
-      // Attempt to clean markdown fences before parsing
       let jsonStringToParse = content.trim();
       if (jsonStringToParse.startsWith("```json") && jsonStringToParse.endsWith("```")) {
         jsonStringToParse = jsonStringToParse.substring(7, jsonStringToParse.length - 3).trim();
       } else if (jsonStringToParse.startsWith("```") && jsonStringToParse.endsWith("```")) {
         jsonStringToParse = jsonStringToParse.substring(3, jsonStringToParse.length - 3).trim();
       }
-      // Attempt to fix bad Unicode escapes
       jsonStringToParse = jsonStringToParse.replace(/\\(?![nrtbf"'\\])/g, '\\\\');
       return JSON.parse(jsonStringToParse);
     } catch (e) {
       console.warn("Failed to parse GPT response content as JSON:", content, "Error:", e);
-      // Optionally, you could throw an error here to be caught by profile.ts
-      // throw new Error("Failed to parse GPT response content as JSON.");
-      return []; // Return empty array if parsing fails
+      return [];
     }
   }
 
   console.warn("No valid content found in GPT response:", data);
-  return []; // Return empty array if no content string
+  return [];
 }
