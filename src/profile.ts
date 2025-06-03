@@ -440,7 +440,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', content: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]' },
+              { type: 'text', text: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]' },
               { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
             ]
           }
