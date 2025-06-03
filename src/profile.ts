@@ -529,7 +529,7 @@ processLinkedInButton?.addEventListener('click', async () => {
       fields: {
         'Employee Code': [recordId], // Use the fetched recordId
         'Company': item.company,
-        'Role Title': item.role,
+        'Role': item.role,
         'Start Date': safeConvertToISO(item.start),
         'End Date': safeConvertToISO(item.end),
         'Description': item.description || ''
