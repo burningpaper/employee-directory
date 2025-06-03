@@ -56,12 +56,46 @@ Format your response as:
     })
   });
 
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error("OpenAI API Error:", {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+    });
+    // Try to parse the error body as JSON for a more specific message
+    try {
+      const errorJson = JSON.parse(errorBody);
+      if (errorJson.error && errorJson.error.message) {
+        throw new Error(`OpenAI API Error: ${errorJson.error.message}`);
+      }
+    } catch (e) { /* Ignore if errorBody is not JSON */ }
+    throw new Error(`OpenAI API request failed with status ${response.status}: ${response.statusText}`);
+  }
+
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
-  try {
-    return JSON.parse(content);
-  } catch (e) {
-    console.warn("Failed to parse GPT response:", content);
-    return [];
+
+  if (typeof content === 'string') {
+    try {
+      // Attempt to clean markdown fences before parsing
+      let jsonStringToParse = content.trim();
+      if (jsonStringToParse.startsWith("```json") && jsonStringToParse.endsWith("```")) {
+        jsonStringToParse = jsonStringToParse.substring(7, jsonStringToParse.length - 3).trim();
+      } else if (jsonStringToParse.startsWith("```") && jsonStringToParse.endsWith("```")) {
+        jsonStringToParse = jsonStringToParse.substring(3, jsonStringToParse.length - 3).trim();
+      }
+      // Attempt to fix bad Unicode escapes
+      jsonStringToParse = jsonStringToParse.replace(/\\(?![nrtbf"'\\])/g, '\\\\');
+      return JSON.parse(jsonStringToParse);
+    } catch (e) {
+      console.warn("Failed to parse GPT response content as JSON:", content, "Error:", e);
+      // Optionally, you could throw an error here to be caught by profile.ts
+      // throw new Error("Failed to parse GPT response content as JSON.");
+      return []; // Return empty array if parsing fails
+    }
   }
+
+  console.warn("No valid content found in GPT response:", data);
+  return []; // Return empty array if no content string
 }
