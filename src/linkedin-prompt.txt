@@ -1,32 +1,42 @@
-You are extracting structured job history from a screenshot of a LinkedIn profile.
+You will be given a **screenshot of a LinkedIn profile’s Experience section**.  
+Your task is to extract the **work experience data** with extreme accuracy.  
 
-Rules:
-- Only include entries that are clearly listed under the 'Experience' section.
-- Each entry must contain:
-  - company
-  - role
-  - location (if visible)
-  - start_date (e.g., Apr 2020)
-  - end_date (e.g., Feb 2023 or "Present")
-  - description (full, with newlines as \n)
+❗️Only include actual **roles the person held** at official **employers**, as listed in the **main job header section** (usually bold and top-aligned).  
 
-Strict instructions:
-- Do NOT guess missing entries based on similar text blocks or formatting.
-- If you cannot see a field clearly, leave it as an empty string.
-- Do NOT add companies or job titles that do not appear *under the experience section*.
-- Only extract experience entries that have visible start and end dates.
-- Format as JSON array, example:
+⚠️ Ignore any brands or companies mentioned in descriptions as:  
+- Clients  
+- Brand portfolios  
+- Projects  
+- Collaborators  
+- Speaking engagements or boards  
+
+Do not hallucinate or infer missing jobs.  
+
+Output a **clean JSON array** in the following format:
 
 [
   {
-    "company": "VML South Africa",
-    "role": "Chief Strategy Officer",
-    "location": "Johannesburg, South Africa",
-    "start_date": "Feb 2024",
-    "end_date": "Present",
-    "description": "VML&R Parusha Partha: Challenging the commonplace notion of strategy..."
+    "company": "Company Name",
+    "role": "Job Title",
+    "start": "Apr 2022",
+    "end": "Present",
+    "description": "Short summary of what the person did in this role, exactly as it appears"
   },
-  ...
+  {
+    "company": "Next Company",
+    "role": "Another Title",
+    "start": "Jan 2020",
+    "end": "Mar 2022",
+    "description": "..."
+  }
 ]
 
-Now extract from this screenshot:
+Notes:
+- If a company appears more than once with different roles, include each as a separate object with correct dates.
+- Use the date format "MMM YYYY" (e.g., "Jun 2019").
+- If an end date is not listed, use "Present".
+- Preserve formatting and paragraph structure from the description.
+- Never fabricate roles or fill in missing data from context — only extract what's visible.
+- If multiple roles are grouped under one company (as is often done on LinkedIn), extract each role separately using the respective title and date range.
+
+⚠️ The extraction should be surgical, accurate, and **based only on what is visually present in the screenshot**.
