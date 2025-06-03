@@ -425,6 +425,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
   if (!file) return alert('Upload a screenshot first.');
   const reader = new FileReader();
 
+  const fileType = file.type; // Get the MIME type of the uploaded file
   reader.onload = async () => {
     const base64 = (reader.result as string).split(',')[1];
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -440,7 +441,7 @@ el('processLinkedIn')?.addEventListener('click', async () => {
             role: 'user',
             content: [
               { type: 'text', content: 'Extract work experience from this LinkedIn profile screenshot. Return JSON like: [{company, role, start, end, description}]' },
-              { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } }
+              { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
             ]
           }
         ]
@@ -454,13 +455,17 @@ el('processLinkedIn')?.addEventListener('click', async () => {
         statusText: res.statusText,
         body: errorBody,
       });
-      el('linkedInOutput')!.textContent = `Error with OpenAI API: ${res.status} ${res.statusText}. Check console for details.`;
+      let displayErrorMessage = `Error with OpenAI API: ${res.status} ${res.statusText}.`;
       try {
         const errorJson = JSON.parse(errorBody);
         if (errorJson.error && errorJson.error.message) {
-          el('linkedInOutput')!.textContent = `OpenAI Error: ${errorJson.error.message}`;
+          displayErrorMessage += ` OpenAI Message: ${errorJson.error.message}`;
         }
-      } catch (e) { /* Already logged raw text */ }
+      } catch (e) {
+        displayErrorMessage += ` See console for full error body.`;
+
+      }
+      el('linkedInOutput')!.textContent = displayErrorMessage;
       return;
     }
 
