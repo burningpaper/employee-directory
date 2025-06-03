@@ -2,6 +2,9 @@
 // 1. Upload screenshot to OpenAI vision API
 // 2. Prompt GPT-4o to extract structured JSON of work experience only
 
+// Import the prompt text from the external file
+import linkedinPrompt from './linkedin-prompt.txt?raw';
+
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 
 export async function extractWorkExperienceFromImage(base64Image) {
@@ -19,31 +22,7 @@ export async function extractWorkExperienceFromImage(base64Image) {
           content: [
             {
               type: "text",
-              text: `You are an AI assistant tasked with extracting structured work experience data from a screenshot of a LinkedIn profile. The screenshot has already been OCR-scanned into plain text. Use only the information that can be visually confirmed in the text. Do not guess or infer missing data. Return results in structured JSON format.
-
-Instructions:
-- Parse the text carefully and extract only confirmed work experience entries.
-- Each job should include:
-  - Company (exact name as shown)
-  - Role (job title)
-  - Start Date (if visible)
-  - End Date (if visible)
-  - Description (if available)
-- Do not include any companies or roles that are not explicitly listed.
-- Do not fabricate job entries based on assumptions.
-- If a piece of data is not clearly visible, omit it instead of guessing.
-
-Format your response as:
-[
-  {
-    "Company": "Company Name",
-    "Role": "Job Title",
-    "Start Date": "Start Date",
-    "End Date": "End Date",
-    "Description": "Description"
-  },
-  ...
-]`
+              text: linkedinPrompt
             },
             {
               type: "image_url",

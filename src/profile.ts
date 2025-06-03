@@ -469,7 +469,7 @@ processLinkedInButton?.addEventListener('click', async () => {
   }
   const reader = new FileReader();
 
-  const fileType = file.type; // Get the MIME type of the uploaded file
+  // const fileType = file.type; // Get the MIME type of the uploaded file (currently unused)
   reader.onload = async () => {
     const base64 = (reader.result as string).split(',')[1];
 
