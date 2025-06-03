@@ -434,6 +434,9 @@ function safeConvertToISO(dateString: string | undefined | null): string | null 
   return formattedDate;
 }
 
+// Import the prompt from the external file
+import linkedInPromptText from './linkedin-prompt.txt?raw';
+
 const processLinkedInButton = el('processLinkedIn');
 const linkedInOutputElement = el('linkedInOutput');
 
@@ -481,7 +484,7 @@ processLinkedInButton?.addEventListener('click', async () => {
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Extract ONLY the work experience from this LinkedIn screenshot. Do not guess or add missing information. Return a JSON array of entries in this structure:\n\n[\n  {\n    \"company\": \"\",\n    \"role\": \"\",\n    \"location\": \"\",\n    \"start_date\": \"\", \n    \"end_date\": \"\", \n    \"description\": \"\"\n  },\n  ...\n]\n\nStrict rules:\n- Use only what is clearly visible in the image.\n- If dates are expressed as ranges like Jun 2021 – Present, split them accurately.\n- Preserve line breaks in descriptions as newline characters (\\n).\n- Ignore profile header, recommendations, or unrelated sections.\n- Ensure each job is a separate object, even if it’s at the same company.\n\nHere is the screenshot:'
+              { type: 'text', text: linkedInPromptText
               },
               { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
             ]
