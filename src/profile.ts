@@ -406,23 +406,37 @@ async function openTraitsModal(currentIDs: string[], recordId: string) {
     location.reload();
   };
 }
-el('processLinkedIn')?.addEventListener('click', async () => {
+
+const processLinkedInButton = el('processLinkedIn');
+const linkedInOutputElement = el('linkedInOutput');
+
+processLinkedInButton?.addEventListener('click', async () => {
   if (!OPENAI_KEY) {
     console.error("OpenAI API Key (VITE_OPENAI_KEY) is not set in environment variables.");
     alert("OpenAI API Key is not configured. LinkedIn import feature is disabled.");
-    el('linkedInOutput')!.textContent = "OpenAI API Key not configured.";
+    if (linkedInOutputElement) linkedInOutputElement.textContent = "OpenAI API Key not configured.";
     return;
   }
+
+  if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = true;
+  if (linkedInOutputElement) linkedInOutputElement.textContent = "Processing LinkedIn screenshot, please wait...";
 
   const fileInput = el('linkedinUpload') as HTMLInputElement | null;
   const file = fileInput?.files?.[0];
   const recordId = new URLSearchParams(window.location.search).get('id'); // Get recordId again or pass it if this function is called from a context where it's available
   if (!recordId) {
     alert('Employee ID not found. Cannot process LinkedIn data.');
+    if (linkedInOutputElement) linkedInOutputElement.textContent = "Error: Employee ID not found.";
+    if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
     return;
   }
 
-  if (!file) return alert('Upload a screenshot first.');
+  if (!file) {
+    alert('Upload a screenshot first.');
+    if (linkedInOutputElement) linkedInOutputElement.textContent = "Please upload a screenshot.";
+    if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
+    return;
+  }
   const reader = new FileReader();
 
   const fileType = file.type; // Get the MIME type of the uploaded file
@@ -465,13 +479,13 @@ el('processLinkedIn')?.addEventListener('click', async () => {
         displayErrorMessage += ` See console for full error body.`;
 
       }
-      el('linkedInOutput')!.textContent = displayErrorMessage;
+      if (linkedInOutputElement) linkedInOutputElement.textContent = displayErrorMessage;
+      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
 
     const data = await res.json();
     const rawGptResponse = data.choices?.[0]?.message?.content || 'No result.';
-    el('linkedInOutput')!.textContent = rawGptResponse;
 
     // Clean the response: remove potential markdown code block fences
     let jsonStringToParse = rawGptResponse.trim();
@@ -486,9 +500,11 @@ el('processLinkedIn')?.addEventListener('click', async () => {
     try {
       parsed = JSON.parse(jsonStringToParse);
     } catch (e) {
-      console.warn('OpenAI response was not parseable as JSON even after cleaning attempts. Raw response:', rawGptResponse, 'Attempted to parse:', jsonStringToParse);
+      const parseErrorMessage = 'Could not parse response from OpenAI. The AI may not have returned valid data.';
+      console.warn(`${parseErrorMessage} Raw response:`, rawGptResponse, 'Attempted to parse:', jsonStringToParse);
       console.error('JSON Parsing Error:', e); // Log the actual error
-      alert('Could not parse response from OpenAI. Check the raw result in the text area.');
+      if (linkedInOutputElement) linkedInOutputElement.textContent = parseErrorMessage;
+      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
     const records = parsed.map((item: any) => ({
@@ -502,10 +518,18 @@ el('processLinkedIn')?.addEventListener('click', async () => {
       }
     }));
 
-    const resp = await post(EXP_TABLE, { records });
-    console.log('Inserted work experience:', resp);
-    alert('Work experience imported. Reloading page.');
-    location.reload();
+    try {
+      if (linkedInOutputElement) linkedInOutputElement.textContent = "Saving extracted experience to database...";
+      const resp = await createRecordsInBatches(EXP_TABLE, records);
+      console.log('Inserted work experience:', resp);
+      if (linkedInOutputElement) linkedInOutputElement.textContent = "Work experience successfully imported!";
+      alert('Work experience imported. Reloading page.');
+      location.reload();
+    } catch (error) {
+      console.error("Error saving work experience to Airtable:", error);
+      if (linkedInOutputElement) linkedInOutputElement.textContent = "Error saving data to database. Please check console for details.";
+      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
+    }
   };
 
   reader.readAsDataURL(file);
