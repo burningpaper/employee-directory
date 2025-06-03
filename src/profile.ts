@@ -407,6 +407,33 @@ async function openTraitsModal(currentIDs: string[], recordId: string) {
   };
 }
 
+// Moved and updated safeConvertToISO to be a top-level function
+function safeConvertToISO(dateString: string | undefined | null): string | null {
+  if (!dateString || typeof dateString !== 'string') {
+    console.log('safeConvertToISO input: (skipped, not a string or falsy)', dateString);
+    return null;
+  }
+  const trimmedDateString = dateString.trim();
+  const lowerDateString = trimmedDateString.toLowerCase();
+
+  if (lowerDateString === 'present' || lowerDateString === '') {
+    console.log(`safeConvertToISO input: "${trimmedDateString}" (interpreted as no date/present)`);
+    return null;
+  }
+  const date = new Date(trimmedDateString);
+  if (isNaN(date.getTime())) {
+    console.warn(`safeConvertToISO: Invalid date string encountered: "${trimmedDateString}". new Date() resulted in NaN.`);
+    return null;
+  }
+  // Format as YYYY-MM-DD for Airtable date fields
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
+  const day = date.getDate().toString().padStart(2, '0');
+  const formattedDate = `${year}-${month}-${day}`;
+  console.log(`safeConvertToISO input: "${trimmedDateString}", Converted to: "${formattedDate}"`);
+  return formattedDate;
+}
+
 const processLinkedInButton = el('processLinkedIn');
 const linkedInOutputElement = el('linkedInOutput');
 
@@ -483,24 +510,6 @@ processLinkedInButton?.addEventListener('click', async () => {
       if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
-
-    function safeConvertToISO(dateString: string | undefined | null): string | null {
-      if (!dateString || typeof dateString !== 'string') {
-        return null;
-      }
-      const lowerDateString = dateString.toLowerCase().trim();
-      if (lowerDateString === 'present' || lowerDateString === '') {
-        return null;
-      }
-      const date = new Date(dateString);
-      // Check if the date is valid
-      if (isNaN(date.getTime())) {
-        console.warn(`Invalid date string encountered: "${dateString}". Could not convert to ISOString.`);
-        return null;
-      }
-      return date.toISOString();
-    }
-    
 
     const data = await res.json();
     const rawGptResponse = data.choices?.[0]?.message?.content || 'No result.';
