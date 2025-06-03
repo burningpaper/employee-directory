@@ -523,6 +523,10 @@ processLinkedInButton?.addEventListener('click', async () => {
       // Handle generic ``` ``` case if ```json is not present but other language tag might be
       jsonStringToParse = jsonStringToParse.substring(3, jsonStringToParse.length - 3).trim();
     }
+    
+    // Attempt to fix bad Unicode escapes by replacing unescaped backslashes
+    // This looks for a backslash NOT followed by n, r, t, b, f, ", or another \
+    jsonStringToParse = jsonStringToParse.replace(/\\(?![nrtbf"'\\])/g, '\\\\');
 
     let parsed;
     try {
