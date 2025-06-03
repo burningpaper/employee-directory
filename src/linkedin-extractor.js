@@ -19,7 +19,7 @@ export async function extractWorkExperienceFromImage(base64Image) {
           content: [
             {
               type: "text",
-              content: `You are an AI assistant tasked with extracting structured work experience data from a screenshot of a LinkedIn profile. The screenshot has already been OCR-scanned into plain text. Use only the information that can be visually confirmed in the text. Do not guess or infer missing data. Return results in structured JSON format.
+              text: `You are an AI assistant tasked with extracting structured work experience data from a screenshot of a LinkedIn profile. The screenshot has already been OCR-scanned into plain text. Use only the information that can be visually confirmed in the text. Do not guess or infer missing data. Return results in structured JSON format.
 
 Instructions:
 - Parse the text carefully and extract only confirmed work experience entries.
