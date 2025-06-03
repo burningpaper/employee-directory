@@ -434,8 +434,8 @@ function safeConvertToISO(dateString: string | undefined | null): string | null 
   return formattedDate;
 }
 
-// Import the prompt from the external file
-import linkedInPromptText from './linkedin-prompt.txt?raw';
+// Import the extraction function from the new module
+import { extractWorkExperienceFromImage } from './linkedin-extractor.js';
 
 const processLinkedInButton = el('processLinkedIn');
 const linkedInOutputElement = el('linkedInOutput');
@@ -472,72 +472,23 @@ processLinkedInButton?.addEventListener('click', async () => {
   const fileType = file.type; // Get the MIME type of the uploaded file
   reader.onload = async () => {
     const base64 = (reader.result as string).split(',')[1];
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${OPENAI_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: linkedInPromptText
-              },
-              { type: 'image_url', image_url: { url: `data:${fileType};base64,${base64}` } }
-            ]
-          }
-        ]
-      })
-    });
 
-    if (!res.ok) {
-      const errorBody = await res.text();
-      console.error('OpenAI API Error Details:', {
-        status: res.status,
-        statusText: res.statusText,
-        body: errorBody,
-      });
-      let displayErrorMessage = `Error with OpenAI API: ${res.status} ${res.statusText}.`;
-      try {
-        const errorJson = JSON.parse(errorBody);
-        if (errorJson.error && errorJson.error.message) {
-          displayErrorMessage += ` OpenAI Message: ${errorJson.error.message}`;
-        }
-      } catch (e) {
-        displayErrorMessage += ` See console for full error body.`;
-
-      }
-      if (linkedInOutputElement) linkedInOutputElement.textContent = displayErrorMessage;
+    let parsed;
+    try {
+      // Call the external function to get parsed data
+      parsed = await extractWorkExperienceFromImage(base64);
+    } catch (error: any) {
+      console.error('Error calling extractWorkExperienceFromImage:', error);
+      const errorMessage = error.message || 'Failed to extract experience from image. Check console for details.';
+      if (linkedInOutputElement) linkedInOutputElement.textContent = errorMessage;
       if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
 
-    const data = await res.json();
-    const rawGptResponse = data.choices?.[0]?.message?.content || 'No result.';
-
-    // Clean the response: remove potential markdown code block fences
-    let jsonStringToParse = rawGptResponse.trim();
-    if (jsonStringToParse.startsWith("```json") && jsonStringToParse.endsWith("```")) {
-      jsonStringToParse = jsonStringToParse.substring(7, jsonStringToParse.length - 3).trim();
-    } else if (jsonStringToParse.startsWith("```") && jsonStringToParse.endsWith("```")) {
-      // Handle generic ``` ``` case if ```json is not present but other language tag might be
-      jsonStringToParse = jsonStringToParse.substring(3, jsonStringToParse.length - 3).trim();
-    }
-    
-    // Attempt to fix bad Unicode escapes by replacing unescaped backslashes
-    // This looks for a backslash NOT followed by n, r, t, b, f, ", or another \
-    jsonStringToParse = jsonStringToParse.replace(/\\(?![nrtbf"'\\])/g, '\\\\');
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStringToParse);
-    } catch (e) {
+    // The extractWorkExperienceFromImage function now handles parsing and returns an array (or [] on error)
+    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) {
       const parseErrorMessage = 'Could not parse response from OpenAI. The AI may not have returned valid data.';
-      console.warn(`${parseErrorMessage} Raw response:`, rawGptResponse, 'Attempted to parse:', jsonStringToParse);
-      console.error('JSON Parsing Error:', e); // Log the actual error
+      console.warn(parseErrorMessage, "Result from extractor:", parsed);
       if (linkedInOutputElement) linkedInOutputElement.textContent = parseErrorMessage;
       if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
