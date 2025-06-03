@@ -1,0 +1,32 @@
+You are extracting structured job history from a screenshot of a LinkedIn profile.
+
+Rules:
+- Only include entries that are clearly listed under the 'Experience' section.
+- Each entry must contain:
+  - company
+  - role
+  - location (if visible)
+  - start_date (e.g., Apr 2020)
+  - end_date (e.g., Feb 2023 or "Present")
+  - description (full, with newlines as \n)
+
+Strict instructions:
+- Do NOT guess missing entries based on similar text blocks or formatting.
+- If you cannot see a field clearly, leave it as an empty string.
+- Do NOT add companies or job titles that do not appear *under the experience section*.
+- Only extract experience entries that have visible start and end dates.
+- Format as JSON array, example:
+
+[
+  {
+    "company": "VML South Africa",
+    "role": "Chief Strategy Officer",
+    "location": "Johannesburg, South Africa",
+    "start_date": "Feb 2024",
+    "end_date": "Present",
+    "description": "VML&R Parusha Partha: Challenging the commonplace notion of strategy..."
+  },
+  ...
+]
+
+Now extract from this screenshot:
