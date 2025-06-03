@@ -484,6 +484,24 @@ processLinkedInButton?.addEventListener('click', async () => {
       return;
     }
 
+    function safeConvertToISO(dateString: string | undefined | null): string | null {
+      if (!dateString || typeof dateString !== 'string') {
+        return null;
+      }
+      const lowerDateString = dateString.toLowerCase().trim();
+      if (lowerDateString === 'present' || lowerDateString === '') {
+        return null;
+      }
+      const date = new Date(dateString);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`Invalid date string encountered: "${dateString}". Could not convert to ISOString.`);
+        return null;
+      }
+      return date.toISOString();
+    }
+    
+
     const data = await res.json();
     const rawGptResponse = data.choices?.[0]?.message?.content || 'No result.';
 
@@ -512,8 +530,8 @@ processLinkedInButton?.addEventListener('click', async () => {
         'Employee Code': [recordId], // Use the fetched recordId
         'Company': item.company,
         'Role Title': item.role,
-        'Start Date': item.start ? new Date(item.start).toISOString() : null,
-        'End Date': item.end ? new Date(item.end).toISOString() : null,
+        'Start Date': safeConvertToISO(item.start),
+        'End Date': safeConvertToISO(item.end),
         'Description': item.description || ''
       }
     }));
