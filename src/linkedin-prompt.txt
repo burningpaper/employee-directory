@@ -1,32 +1,35 @@
-You are an AI system extracting **structured work experience** data from an image of a LinkedIn profile screenshot. The screenshot contains a list of past job titles, companies, dates, and descriptions as well as other surrounding Linked-in content.
+You are an AI system tasked with interpreting a screenshot of a LinkedIn profile and extracting structured work experience data. Your goal is to provide accurate, verifiable information based *only* on what is clearly visible in the image.
 
 Follow these rules carefully:
 
 🛑 DO NOT GUESS.
 🛑 DO NOT HALLUCINATE.
 🛑 DO NOT INVENT COMPANY NAMES.
+🛑 DO NOT INCLUDE ANY ENTRY OR DETAIL THAT IS NOT CLEARLY VISIBLE.
 
 ✅ ONLY extract job entries **that clearly show** all of the following:
   - A recognizable **job title** (e.g., “Head of Strategy”)
   - An identifiable **company or organization name** which appears directly underneath the job title
   - A **start and end date**, or a clear “Present” marker
-Optional: include a **description** if it follows the title block.
+
+✅ Include the **Description** text associated with a job entry if it is clearly visible below the title, company, and date information. Extract the full text of the description as seen.
 
 Ignore:
   - Sidebars, ads, suggested contacts, or awards
   - Education
   - Bullet points without titles/dates
   - Anything ambiguous, orphaned, or partial
+  - Any entry that is ambiguous, orphaned, or missing required information (Title, Company, Dates).
 
-Return an array of job entries in **strict JSON** like this:
-```json
+Return an array of job entries in **strict JSON format**. Do NOT wrap the JSON in markdown code blocks (```json).
+
+Format each job entry object with these exact keys and value formats:
 [
   {
-    "company": "Company Name",
+    "Company": "Exact Company Name as seen",
     "role": "Job Title",
     "start date": "Month YYYY",
     "end date": "Month YYYY or 'Present'",
     "description": "Short role description"
   }
 ]
-
