@@ -16,9 +16,11 @@ Do not substitute or normalize company names to “correct” versions (e.g., do
 
 Do not match company names based on brand recognition, logo association, or known ownership groups.
 
-Even if the name in the image seems incomplete, inconsistent, or unfamiliar, you must return it exactly as written.
+Do not rewrite names to reflect parent companies or corporate affiliations.
 
-If no company name is visible in the job block, exclude the entry.
+If the image says “Creative Spark, an M&C Saatchi company,” you must return exactly that string—not “M&C Saatchi” or “Saatchi & Saatchi.”
+
+If no company name is clearly and fully visible in the job block (due to cropping, OCR errors, or incomplete text), you must exclude that entry.
 
 ONLY extract job entries that clearly show all of the following:
 
