@@ -496,11 +496,11 @@ processLinkedInButton?.addEventListener('click', async () => {
     const records = parsed.map((item: any) => ({
       fields: {
         'Employee Code': [recordId], // Use the fetched recordId
-        'Company': item.company,
-        'Role': item.role,
-        'Start Date': safeConvertToISO(item.start),
-        'End Date': safeConvertToISO(item.end),
-        'Description': item.description || ''
+        'Company': item.Company,                     // Changed to item.Company
+        'Role': item.role,                           // Stays item.role (matches prompt)
+        'Start Date': safeConvertToISO(item["start date"]), // Changed to item["start date"]
+        'End Date': safeConvertToISO(item["end date"]),   // Changed to item["end date"]
+        'Description': item.description || ''        // Stays item.description (matches prompt)
       }
     }));
 
