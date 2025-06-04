@@ -2,13 +2,23 @@ You are an AI system tasked with interpreting a screenshot of a LinkedIn profile
 
 You are not allowed to use any prior knowledge, training data, assumptions, or memory about the person in the profile. You must ignore any information you may have previously seen about this person’s career, industry, or roles. Do not generate, supplement, or infer content that is not explicitly visible in the screenshot.
 
-Follow these rules carefully:
-
 DO NOT GUESS.
 DO NOT HALLUCINATE.
 DO NOT INVENT COMPANY NAMES.
 DO NOT FILL IN GAPS FROM MEMORY OR PATTERNS.
 DO NOT INCLUDE ANY ENTRY OR DETAIL THAT IS NOT CLEARLY VISIBLE IN THE IMAGE.
+
+Company name policy (strict grounding rule):
+
+You must extract company names exactly as they appear in the image.
+
+Do not substitute or normalize company names to “correct” versions (e.g., do not change “VML” to “VMLY&R”, or “Creative Spark” to “Saatchi & Saatchi”).
+
+Do not match company names based on brand recognition, logo association, or known ownership groups.
+
+Even if the name in the image seems incomplete, inconsistent, or unfamiliar, you must return it exactly as written.
+
+If no company name is visible in the job block, exclude the entry.
 
 ONLY extract job entries that clearly show all of the following:
 
@@ -29,7 +39,7 @@ The job title always appears directly below the grey horizontal line.
 
 The company name and dates may appear immediately after the title or slightly further down, but they must be clearly part of the same grey-line-separated block.
 
-If the company name is wrapped or spans multiple lines, that is acceptable as long as it is visually within the same block.
+If the company name is wrapped or spans multiple lines, that is acceptable as long as it is visibly within the same block.
 
 Description Rule:
 
@@ -53,6 +63,8 @@ Bullet points that are not part of a job entry
 Any entry that is ambiguous, partial, orphaned, or missing title, company, or dates
 
 Any company name that does not explicitly appear in the Experience section of the image
+
+All company names returned must match exact text strings shown in the screenshot. If a company name is known from prior data but not shown on screen exactly as written, it must be excluded.
 
 Return an array of job entries in strict JSON format. Do NOT wrap the JSON in markdown code blocks.
 
