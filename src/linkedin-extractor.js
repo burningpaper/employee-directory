@@ -17,6 +17,7 @@ export async function extractWorkExperienceFromImage(base64Image) {
     body: JSON.stringify({
       model: "gpt-4o",
       messages: [
+        // Setting temperature to 0 makes the output more deterministic and less creative.
         {
           role: "user",
           content: [
@@ -32,7 +33,8 @@ export async function extractWorkExperienceFromImage(base64Image) {
             }
           ]
         }
-      ]
+      ],
+      temperature: 0 // Set temperature to 0 for deterministic output
     })
   });
 
