@@ -4,9 +4,29 @@
 
 // Import the prompt text from the external file
 import linkedinPrompt from './linkedin-prompt.txt?raw';
+// Import pdfjs-dist library
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+// Vite should handle serving this worker.
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
-// const GOOGLE_VISION_API_KEY = import.meta.env.VITE_GOOGLE_CLOUD_VISION_API_KEY; // Removed
+
+// Helper function to extract text from a base64 encoded PDF
+async function extractTextFromBase64Pdf(base64PdfData) {
+  // Decode base64 to a Uint8Array
+  const pdfData = Uint8Array.from(atob(base64PdfData), c => c.charCodeAt(0));
+  const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    fullText += pageText + '\n\n'; // Add newlines between pages for readability
+  }
+  return fullText.trim();
+}
 
 export async function extractWorkExperienceFromPdfData(base64PdfData) {
   if (!OPENAI_API_KEY) {
@@ -25,20 +45,8 @@ export async function extractWorkExperienceFromPdfData(base64PdfData) {
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: linkedinPrompt // Using the updated prompt from linkedin-prompt.txt
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${base64PdfData}` // Sending PDF data
-              }
-              // Note: Using image_url for PDFs is experimental with GPT-4o.
-              // If this doesn't work well, client-side PDF text extraction before sending to OpenAI would be more robust.
-            }
-          ]
+          // Combine the main prompt with the extracted PDF text
+          content: `${linkedinPrompt}\n\n--- PDF DOCUMENT CONTENT START ---\n${await extractTextFromBase64Pdf(base64PdfData)}\n--- PDF DOCUMENT CONTENT END ---`
         }
       ],
       temperature: 0 // Temperature is 0 for deterministic output
