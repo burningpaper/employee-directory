@@ -5,11 +5,14 @@
 // Import the prompt text from the external file
 import linkedinPrompt from './linkedin-prompt.txt?raw';
 // Import pdfjs-dist library
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-// Vite should handle serving this worker.
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
+import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// Import the worker script using Vite's ?worker syntax
+import PdfjsWorker from 'pdfjs-dist/build/pdf.worker.js?worker';
+
+if (typeof window !== 'undefined') { // Ensure this only runs in the browser
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new PdfjsWorker();
+}
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 
