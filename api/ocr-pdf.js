@@ -56,6 +56,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error calling Google Cloud Vision API:', error);
-    res.status(500).json({ error: 'Failed to process PDF with Google Cloud Vision API', details: error.message });
+    res.status(500).json({ error: 'Failed to process PDF with Google Cloud Vision API', details: error.message, stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined });
   }
 }
