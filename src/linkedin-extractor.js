@@ -19,17 +19,25 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 // Helper function to extract text from a base64 encoded PDF
 async function extractTextFromBase64Pdf(base64PdfData) {
   const pdfData = Uint8Array.from(atob(base64PdfData), c => c.charCodeAt(0));
+  console.log("PDF.js: Decoded base64 data, length:", pdfData.length);
   const pdfDocument = await pdfjsLib.getDocument({ data: pdfData }).promise;
+  console.log("PDF.js: Document loaded, number of pages:", pdfDocument.numPages);
   let fullText = '';
 
   for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+    console.log(`PDF.js: Processing page ${pageNum}`);
     const page = await pdfDocument.getPage(pageNum);
     const textContent = await page.getTextContent();
+    console.log(`PDF.js: Page ${pageNum} textContent items count:`, textContent?.items?.length);
     let pageText = '';
 
     if (textContent && textContent.items && textContent.items.length > 0) {
       // Normalize and sort items.
       const items = textContent.items.map(item => ({
+        // Log first few raw items for inspection
+        // if (pageNum === 1 && items.length < 5) { // Corrected placement of this log
+        //   console.log("PDF.js: Raw item data (page 1, first 5):", item);
+        // }
         str: item.str,
         x: item.transform[4],
         y: item.transform[5],
@@ -37,6 +45,9 @@ async function extractTextFromBase64Pdf(base64PdfData) {
         height: item.height,
       })).sort((a, b) => {
         // Sort primarily by Y coordinate, then by X if Y is similar
+        // Log first few raw items for inspection - moved here for correct scope
+        // This log is very verbose, enable only if needed for deep debugging specific items
+        // if (pageNum === 1 && items.indexOf(a) < 2) console.log("PDF.js: Raw item data (page 1, first 2 for sorting):", a, b);
         if (Math.abs(a.y - b.y) > Math.min(a.height, b.height) * 0.5) { // Heuristic: if y-diff is more than half item height
           return a.y - b.y;
         }
@@ -65,10 +76,11 @@ async function extractTextFromBase64Pdf(base64PdfData) {
         lastItemProcessed = item;
       }
       pageText += currentLineBuffer.trim(); // Add any remaining text in the buffer
+      console.log(`PDF.js: Page ${pageNum} processed text (first 200 chars):`, pageText.substring(0,200));
     }
     fullText += pageText.trim() + '\n\n'; // Add double newlines between pages
   }
-  console.log("Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : "")); // Log a larger snippet
+  console.log("PDF.js: Final Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : "")); // Log a larger snippet
   return fullText.trim();
 }
 
@@ -77,6 +89,8 @@ export async function extractWorkExperienceFromPdfData(base64PdfData) {
     console.error("OpenAI API Key is not configured (VITE_OPENAI_KEY). Extraction step will be skipped.");
     throw new Error("OpenAI API Key is not configured.");
   }
+
+  const extractedText = await extractTextFromBase64Pdf(base64PdfData);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -90,7 +104,7 @@ export async function extractWorkExperienceFromPdfData(base64PdfData) {
         {
           role: "user",
           // Combine the main prompt with the extracted PDF text
-          content: `${linkedinPrompt}\n\n--- PDF DOCUMENT CONTENT START ---\n${await extractTextFromBase64Pdf(base64PdfData)}\n--- PDF DOCUMENT CONTENT END ---`
+          content: `${linkedinPrompt}\n\n--- PDF DOCUMENT CONTENT START ---\n${extractedText}\n--- PDF DOCUMENT CONTENT END ---`
         }
       ],
       temperature: 0 // Temperature is 0 for deterministic output
@@ -130,17 +144,17 @@ export async function extractWorkExperienceFromPdfData(base64PdfData) {
       }
       const parsedResult = JSON.parse(jsonStringToParse);
       if (Array.isArray(parsedResult)) {
-        return parsedResult;
+        return { extractedText, workExperience: parsedResult };
       } else {
         console.warn("GPT response was valid JSON but not an array:", parsedResult);
-        return []; // Expecting an array
+        return { extractedText, workExperience: [] }; // Expecting an array
       }
     } catch (e) {
       console.error("Failed to parse GPT-4o response content as JSON:", content, "Error:", e);
-      return [];
+      return { extractedText, workExperience: [] };
     }
   }
 
   console.warn("No valid string content found in GPT-4o response:", data);
-  return [];
+  return { extractedText, workExperience: [] };
 }
