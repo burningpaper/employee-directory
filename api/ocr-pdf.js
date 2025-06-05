@@ -26,6 +26,11 @@ export default async function handler(req, res) {
     // For local dev, ensure ADC is configured (e.g., `gcloud auth application-default login`)
     // or GOOGLE_APPLICATION_CREDENTIALS points to your key file.
     if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        console.error("Google Cloud credentials environment variables are NOT set.");
+        return res.status(500).json({ error: 'Server configuration error: Google Cloud credentials not set.' });
+    } else {
+        // Log which variable is found (don't log the content!)
+        console.log(`Google Cloud credentials environment variable found: ${process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ? 'GOOGLE_APPLICATION_CREDENTIALS_JSON' : 'GOOGLE_APPLICATION_CREDENTIALS'}`);
         console.error("Google Cloud credentials are not configured. Set GOOGLE_APPLICATION_CREDENTIALS_JSON (with JSON content) or GOOGLE_APPLICATION_CREDENTIALS (path to file) environment variable.");
         return res.status(500).json({ error: 'Server configuration error: Google Cloud credentials not set.' });
     }
