@@ -75,6 +75,8 @@ export async function extractWorkExperienceFromPdfData(base64PdfData) {
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
 
+  console.log("Raw content from OpenAI API:", content); // Log the raw content
+
   // The 'content' should be a JSON string representing an array of job objects.
 
   if (typeof content === 'string') {
