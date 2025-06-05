@@ -27,36 +27,48 @@ async function extractTextFromBase64Pdf(base64PdfData) {
     const textContent = await page.getTextContent();
     let pageText = '';
 
-    if (textContent && textContent.items) {
-      // Sort items by their y then x coordinates to approximate reading order
-      const Y_THRESHOLD = 1.5; // Adjust as needed: multiplier for item height to detect new line
-      const X_THRESHOLD_SPACE = 0.2; // Adjust as needed: multiplier for item height to detect space
-
-      const sortedItems = textContent.items.slice().sort((a, b) => {
-        const yDiff = a.transform[5] - b.transform[5]; // transform[5] is y
-        // A common height, e.g., height of 'M', could be used for threshold,
-        // but using a fraction of item height is simpler here.
-        // For now, using a small fixed threshold or comparing directly.
-        if (Math.abs(yDiff) > (a.height * Y_THRESHOLD * 0.5 || 1) ) { // Heuristic for new line
-            return yDiff;
+    if (textContent && textContent.items && textContent.items.length > 0) {
+      // Normalize and sort items.
+      const items = textContent.items.map(item => ({
+        str: item.str,
+        x: item.transform[4],
+        y: item.transform[5],
+        width: item.width,
+        height: item.height,
+      })).sort((a, b) => {
+        // Sort primarily by Y coordinate, then by X if Y is similar
+        if (Math.abs(a.y - b.y) > Math.min(a.height, b.height) * 0.5) { // Heuristic: if y-diff is more than half item height
+          return a.y - b.y;
         }
-        return a.transform[4] - b.transform[4]; // transform[4] is x
+        return a.x - b.x;
       });
 
-      let lastY = null;
-      for (const item of sortedItems) {
-        if (lastY !== null && Math.abs(item.transform[5] - lastY) > (item.height * Y_THRESHOLD * 0.5 || 1)) {
-          pageText += '\n'; // New line
-        } else if (pageText.length > 0 && !pageText.endsWith('\n') && !pageText.endsWith(' ')) {
-          pageText += ' '; // Add a space if not starting a new line and no space exists
+      let currentLineBuffer = '';
+      let lastItemProcessed = null;
+
+      for (const item of items) {
+        if (item.str.trim() === '') continue; // Skip items that are only whitespace
+
+        if (lastItemProcessed) {
+          const yDifference = Math.abs(item.y - lastItemProcessed.y);
+          const xDifference = item.x - (lastItemProcessed.x + lastItemProcessed.width);
+
+          // Condition for a new line: significant change in Y, or starting to the left of previous item on a close Y.
+          if (yDifference > Math.min(item.height, lastItemProcessed.height) * 0.7 || (item.x < lastItemProcessed.x && yDifference > item.height * 0.15) ) {
+            pageText += currentLineBuffer.trim() + '\n';
+            currentLineBuffer = '';
+          } else if (xDifference > item.height * 0.2) { // Condition for a space: horizontal gap is noticeable
+            currentLineBuffer += ' ';
+          }
         }
-        pageText += item.str;
-        lastY = item.transform[5];
+        currentLineBuffer += item.str;
+        lastItemProcessed = item;
       }
+      pageText += currentLineBuffer.trim(); // Add any remaining text in the buffer
     }
     fullText += pageText.trim() + '\n\n'; // Add double newlines between pages
   }
-  console.log("Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1000) + (fullText.length > 1000 ? "..." : "")); // Log a snippet
+  console.log("Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : "")); // Log a larger snippet
   return fullText.trim();
 }
 
