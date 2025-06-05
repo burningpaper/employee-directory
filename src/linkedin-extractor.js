@@ -5,6 +5,7 @@
 // Import the prompt text from the external file
 import linkedinPrompt from './linkedin-prompt.txt?raw';
 // Import pdfjs-dist library
+import Tesseract from 'tesseract.js';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Import the URL of the worker script using Vite's ?url syntax
@@ -16,78 +17,67 @@ if (typeof window !== 'undefined') { // Ensure this only runs in the browser
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 
-// Helper function to extract text from a base64 encoded PDF
+// Helper function to OCR text from a base64 encoded PDF (image-based)
 async function extractTextFromBase64Pdf(base64PdfData) {
   const pdfData = Uint8Array.from(atob(base64PdfData), c => c.charCodeAt(0));
   console.log("PDF.js: Decoded base64 data, length:", pdfData.length);
   const pdfDocument = await pdfjsLib.getDocument({ data: pdfData }).promise;
   console.log("PDF.js: Document loaded, number of pages:", pdfDocument.numPages);
   let fullText = '';
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
 
   for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
     console.log(`PDF.js: Processing page ${pageNum}`);
     const page = await pdfDocument.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    console.log(`PDF.js: Page ${pageNum} textContent items count:`, textContent?.items?.length);
-    let pageText = '';
+    const viewport = page.getViewport({ scale: 2.0 }); // Increase scale for better OCR
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
 
-    if (textContent && textContent.items && textContent.items.length > 0) {
-      // Normalize and sort items.
-      const items = textContent.items.map(item => ({
-        // Log first few raw items for inspection
-        // if (pageNum === 1 && items.length < 5) { // Corrected placement of this log
-        //   console.log("PDF.js: Raw item data (page 1, first 5):", item);
-        // }
-        str: item.str,
-        x: item.transform[4],
-        y: item.transform[5],
-        width: item.width,
-        height: item.height,
-      })).sort((a, b) => {
-        // Sort primarily by Y coordinate, then by X if Y is similar
-        // Log first few raw items for inspection - moved here for correct scope
-        // This log is very verbose, enable only if needed for deep debugging specific items
-        // if (pageNum === 1 && items.indexOf(a) < 2) console.log("PDF.js: Raw item data (page 1, first 2 for sorting):", a, b);
-        if (Math.abs(a.y - b.y) > Math.min(a.height, b.height) * 0.5) { // Heuristic: if y-diff is more than half item height
-          return a.y - b.y;
-        }
-        return a.x - b.x;
-      });
+    await page.render({ canvasContext: context, viewport: viewport }).promise;
+    const imageDataUrl = canvas.toDataURL('image/png');
+    console.log(`Tesseract.js: Starting OCR for page ${pageNum}`);
 
-      let currentLineBuffer = '';
-      let lastItemProcessed = null;
-
-      for (const item of items) {
-        if (item.str.trim() === '') continue; // Skip items that are only whitespace
-
-        if (lastItemProcessed) {
-          const yDifference = Math.abs(item.y - lastItemProcessed.y);
-          const xDifference = item.x - (lastItemProcessed.x + lastItemProcessed.width);
-
-          // Condition for a new line: significant change in Y, or starting to the left of previous item on a close Y.
-          if (yDifference > Math.min(item.height, lastItemProcessed.height) * 0.7 || (item.x < lastItemProcessed.x && yDifference > item.height * 0.15) ) {
-            pageText += currentLineBuffer.trim() + '\n';
-            currentLineBuffer = '';
-          } else if (xDifference > item.height * 0.2) { // Condition for a space: horizontal gap is noticeable
-            currentLineBuffer += ' ';
+    try {
+      const { data: { text } } = await Tesseract.recognize(
+        imageDataUrl,
+        'eng', // English language
+        {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              console.log(`Tesseract.js: OCR progress page ${pageNum}: ${Math.round(m.progress * 100)}%`);
+            } else {
+              console.log(`Tesseract.js: ${m.status} (page ${pageNum})`);
+            }
           }
         }
-        currentLineBuffer += item.str;
-        lastItemProcessed = item;
-      }
-      pageText += currentLineBuffer.trim(); // Add any remaining text in the buffer
-      console.log(`PDF.js: Page ${pageNum} processed text (first 200 chars):`, pageText.substring(0,200));
+      );
+      console.log(`Tesseract.js: Page ${pageNum} OCR result (first 200 chars):`, text.substring(0, 200));
+      fullText += text + '\n\n'; // Add newlines between pages
+    } catch (ocrError) {
+      console.error(`Tesseract.js: OCR failed for page ${pageNum}:`, ocrError);
+      fullText += `[OCR Error on Page ${pageNum}]\n\n`;
     }
-    fullText += pageText.trim() + '\n\n'; // Add double newlines between pages
   }
-  console.log("PDF.js: Final Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : "")); // Log a larger snippet
+  if (canvas.parentNode) { // Clean up canvas if it was appended to DOM (not in this snippet)
+    canvas.parentNode.removeChild(canvas);
+  } else { // Or just clear it if it was never appended
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  console.log("Tesseract.js: Final OCR'd Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : ""));
   return fullText.trim();
 }
 
 export async function extractWorkExperienceFromPdfData(base64PdfData) {
   if (!OPENAI_API_KEY) {
     console.error("OpenAI API Key is not configured (VITE_OPENAI_KEY). Extraction step will be skipped.");
-    throw new Error("OpenAI API Key is not configured.");
+    // Return an empty structure but include the (potentially empty) extractedText for display
+    return { extractedText: await extractTextFromBase64Pdf(base64PdfData).catch(e => {
+        console.error("Error during PDF text extraction for display:", e);
+        return `Error during PDF text extraction: ${e.message}`;
+    }), workExperience: [] };
   }
 
   const extractedText = await extractTextFromBase64Pdf(base64PdfData);
