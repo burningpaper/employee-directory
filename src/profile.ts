@@ -472,28 +472,40 @@ processLinkedInButton?.addEventListener('click', async () => {
   // const fileType = file.type; // Get the MIME type of the uploaded file (currently unused)
   reader.onload = async () => {
     const base64 = (reader.result as string).split(',')[1];
+    const pdfTextOutputElement = el('pdfTextOutput'); // Get reference to the output element
 
-    let parsed;
+    let extractionResult; // Renamed to reflect it's an object { extractedText, workExperience }
     try {
       // Call the external function to get parsed data
-      parsed = await extractWorkExperienceFromPdfData(base64);
+      extractionResult = await extractWorkExperienceFromPdfData(base64);
     } catch (error: any) {
-      console.error('Error calling extractWorkExperienceFromImage:', error);
-      const errorMessage = error.message || 'Failed to extract experience from image. Check console for details.';
+      console.error('Error calling extractWorkExperienceFromPdfData:', error);
+      const errorMessage = error.message || 'Failed to extract experience from PDF. Check console for details.';
       if (linkedInOutputElement) linkedInOutputElement.textContent = errorMessage;
+      // Attempt to display extracted text even if OpenAI parsing fails later or if error occurs after text extraction
+      if (pdfTextOutputElement && extractionResult?.extractedText) {
+        pdfTextOutputElement.textContent = extractionResult.extractedText;
+      }
       if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
 
-    // The extractWorkExperienceFromImage function now handles parsing and returns an array (or [] on error)
-    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) {
-      const parseErrorMessage = 'Could not parse response from OpenAI. The AI may not have returned valid data.';
-      console.warn(parseErrorMessage, "Result from extractor:", parsed);
+    // Display the extracted text on the page
+    if (pdfTextOutputElement && extractionResult?.extractedText) {
+      pdfTextOutputElement.textContent = extractionResult.extractedText;
+    }
+
+    const workExperienceArray = extractionResult?.workExperience; // Access the workExperience array
+
+    // Check if workExperienceArray is actually an array and has items
+    if (!Array.isArray(workExperienceArray) || workExperienceArray.length === 0) {
+      const parseErrorMessage = 'Could not parse work experience from OpenAI, or no work experience was found.';
+      console.warn(parseErrorMessage, "Data from extractor (workExperienceArray):", workExperienceArray);
       if (linkedInOutputElement) linkedInOutputElement.textContent = parseErrorMessage;
       if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
       return;
     }
-    const records = parsed.map((item: any) => ({
+    const records = workExperienceArray.map((item: any) => ({ // Use the workExperienceArray for mapping
       fields: {
         'Employee Code': [recordId], // Use the fetched recordId
         'Company': item.Company,                     // Changed to item.Company
