@@ -18,16 +18,45 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 
 // Helper function to extract text from a base64 encoded PDF
 async function extractTextFromBase64Pdf(base64PdfData) {
-  // Decode base64 to a Uint8Array
   const pdfData = Uint8Array.from(atob(base64PdfData), c => c.charCodeAt(0));
-  const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+  const pdfDocument = await pdfjsLib.getDocument({ data: pdfData }).promise;
   let fullText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
+
+  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+    const page = await pdfDocument.getPage(pageNum);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => item.str).join(' ');
-    fullText += pageText + '\n\n'; // Add newlines between pages for readability
+    let pageText = '';
+
+    if (textContent && textContent.items) {
+      // Sort items by their y then x coordinates to approximate reading order
+      const Y_THRESHOLD = 1.5; // Adjust as needed: multiplier for item height to detect new line
+      const X_THRESHOLD_SPACE = 0.2; // Adjust as needed: multiplier for item height to detect space
+
+      const sortedItems = textContent.items.slice().sort((a, b) => {
+        const yDiff = a.transform[5] - b.transform[5]; // transform[5] is y
+        // A common height, e.g., height of 'M', could be used for threshold,
+        // but using a fraction of item height is simpler here.
+        // For now, using a small fixed threshold or comparing directly.
+        if (Math.abs(yDiff) > (a.height * Y_THRESHOLD * 0.5 || 1) ) { // Heuristic for new line
+            return yDiff;
+        }
+        return a.transform[4] - b.transform[4]; // transform[4] is x
+      });
+
+      let lastY = null;
+      for (const item of sortedItems) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > (item.height * Y_THRESHOLD * 0.5 || 1)) {
+          pageText += '\n'; // New line
+        } else if (pageText.length > 0 && !pageText.endsWith('\n') && !pageText.endsWith(' ')) {
+          pageText += ' '; // Add a space if not starting a new line and no space exists
+        }
+        pageText += item.str;
+        lastY = item.transform[5];
+      }
+    }
+    fullText += pageText.trim() + '\n\n'; // Add double newlines between pages
   }
+  console.log("Extracted PDF Text for AI (length " + fullText.length + "):", fullText.substring(0, 1000) + (fullText.length > 1000 ? "..." : "")); // Log a snippet
   return fullText.trim();
 }
 
