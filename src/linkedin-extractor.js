@@ -30,7 +30,7 @@ async function extractTextFromBase64Pdf(base64PdfData) {
   for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
     console.log(`PDF.js: Processing page ${pageNum}`);
     const page = await pdfDocument.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.0 }); // Increase scale for better OCR
+    const viewport = page.getViewport({ scale: 2.5 }); // Slightly increased scale
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
@@ -43,6 +43,9 @@ async function extractTextFromBase64Pdf(base64PdfData) {
         imageDataUrl,
         'eng', // English language
         {
+          // Try a different Page Segmentation Mode
+          // PSM 6: Assume a single uniform block of text.
+          tessedit_pageseg_mode: '6', // Tesseract PSM option
           logger: m => {
             if (m.status === 'recognizing text') {
               console.log(`Tesseract.js: OCR progress page ${pageNum}: ${Math.round(m.progress * 100)}%`);
