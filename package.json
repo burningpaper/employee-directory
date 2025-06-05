@@ -12,6 +12,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@google-cloud/vision": "^4.0.2",
     "pdfjs-dist": "^4.8.69",
     "tesseract.js": "^6.0.1"
   }

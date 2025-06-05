@@ -19,9 +19,22 @@ async function extractTextFromBase64Pdf(base64PdfData) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from OCR API' }));
-    console.error('Error from OCR API:', response.status, errorData);
-    throw new Error(`OCR API request failed: ${errorData.error || response.statusText}`);
+    let errorResponseMessage = `OCR API request failed with status ${response.status}: ${response.statusText}`;
+    try {
+      // Try to parse as JSON, but anticipate it might not be
+      const errorData = await response.json();
+      if (errorData && errorData.error) {
+        errorResponseMessage = `OCR API request failed: ${errorData.error}`;
+      }
+    } catch (e) {
+      // If response.json() fails, it means the error response wasn't JSON.
+      // This is common for 404s (HTML page) or other non-API errors.
+      const textError = await response.text(); // Get raw text of the error page
+      console.error('Raw error response from OCR API (not JSON):', textError.substring(0, 500)); // Log a portion of the raw response
+      errorResponseMessage = `OCR API request failed with status ${response.status}. Server did not return valid JSON. Response snippet: ${textError.substring(0,100)}...`;
+    }
+    console.error('Error from OCR API:', response.status, errorResponseMessage);
+    throw new Error(errorResponseMessage);
   }
 
   const data = await response.json();
