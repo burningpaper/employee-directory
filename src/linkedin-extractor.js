@@ -4,73 +4,29 @@
 
 // Import the prompt text from the external file
 import linkedinPrompt from './linkedin-prompt.txt?raw';
-// Import pdfjs-dist library
-import Tesseract from 'tesseract.js';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Import the URL of the worker script using Vite's ?url syntax
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
-
-if (typeof window !== 'undefined') { // Ensure this only runs in the browser
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-}
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_KEY;
 
-// Helper function to OCR text from a base64 encoded PDF (image-based)
+// Helper function to get OCR'd text from a base64 encoded PDF via our backend API
 async function extractTextFromBase64Pdf(base64PdfData) {
-  const pdfData = Uint8Array.from(atob(base64PdfData), c => c.charCodeAt(0));
-  console.log("PDF.js: Decoded base64 data, length:", pdfData.length);
-  const pdfDocument = await pdfjsLib.getDocument({ data: pdfData }).promise;
-  console.log("PDF.js: Document loaded, number of pages:", pdfDocument.numPages);
-  let fullText = '';
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
+  console.log("Sending PDF data to backend for OCR...");
+  const response = await fetch('/api/ocr-pdf', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ base64PdfData }),
+  });
 
-  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-    console.log(`PDF.js: Processing page ${pageNum}`);
-    const page = await pdfDocument.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.5 }); // Slightly increased scale
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-
-    await page.render({ canvasContext: context, viewport: viewport }).promise;
-    const imageDataUrl = canvas.toDataURL('image/png');
-    console.log(`Tesseract.js: Starting OCR for page ${pageNum}`);
-
-    try {
-      const { data: { text } } = await Tesseract.recognize(
-        imageDataUrl,
-        'eng', // English language
-        {
-          // Try a different Page Segmentation Mode
-          // PSM 6: Assume a single uniform block of text.
-          tessedit_pageseg_mode: '6', // Tesseract PSM option
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              console.log(`Tesseract.js: OCR progress page ${pageNum}: ${Math.round(m.progress * 100)}%`);
-            } else {
-              console.log(`Tesseract.js: ${m.status} (page ${pageNum})`);
-            }
-          }
-        }
-      );
-      console.log(`Tesseract.js: Page ${pageNum} OCR result (first 200 chars):`, text.substring(0, 200));
-      fullText += text + '\n\n'; // Add newlines between pages
-    } catch (ocrError) {
-      console.error(`Tesseract.js: OCR failed for page ${pageNum}:`, ocrError);
-      fullText += `[OCR Error on Page ${pageNum}]\n\n`;
-    }
-  }
-  if (canvas.parentNode) { // Clean up canvas if it was appended to DOM (not in this snippet)
-    canvas.parentNode.removeChild(canvas);
-  } else { // Or just clear it if it was never appended
-    canvas.width = 0;
-    canvas.height = 0;
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from OCR API' }));
+    console.error('Error from OCR API:', response.status, errorData);
+    throw new Error(`OCR API request failed: ${errorData.error || response.statusText}`);
   }
 
-  console.log("Tesseract.js: Final OCR'd Text for AI (length " + fullText.length + "):", fullText.substring(0, 1500) + (fullText.length > 1500 ? "..." : ""));
-  return fullText.trim();
+  const data = await response.json();
+  console.log("Text extracted via Google Cloud Vision API (length " + (data.extractedText?.length || 0) + "):", (data.extractedText || '').substring(0, 1500) + ((data.extractedText?.length || 0) > 1500 ? "..." : ""));
+  return data.extractedText || '';
 }
 
 export async function extractWorkExperienceFromPdfData(base64PdfData) {
