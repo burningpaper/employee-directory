@@ -26,11 +26,20 @@ export default async function handler(req, res) {
     // For local dev, ensure ADC is configured (e.g., `gcloud auth application-default login`)
     // or GOOGLE_APPLICATION_CREDENTIALS points to your key file.
     if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        console.error("Google Cloud credentials environment variables are NOT set. Please set GOOGLE_APPLICATION_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS.");
+        console.error("Google Cloud credentials environment variables are NOT set. Please set GOOGLE_APPLICATION_CREDENTIALS_JSON (with JSON content) or GOOGLE_APPLICATION_CREDENTIALS (path to file) environment variable.");
         return res.status(500).json({ error: 'Server configuration error: Google Cloud credentials not set.' });
     } else {
-        // Log which variable is found (don't log the content!) and proceed
         console.log(`Google Cloud credentials environment variable found: ${process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ? 'GOOGLE_APPLICATION_CREDENTIALS_JSON' : 'GOOGLE_APPLICATION_CREDENTIALS'}`);
+        if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+            try {
+                JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+                console.log("GOOGLE_APPLICATION_CREDENTIALS_JSON was successfully parsed as JSON.");
+            } catch (e) {
+                console.error("Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON. This is likely the cause of 'Could not load default credentials'. Check the JSON content in Vercel environment variables.", e.message);
+                // The Google library will also fail, so we can return early.
+                return res.status(500).json({ error: 'Server configuration error: Malformed Google Cloud credentials JSON.', details: e.message, stack: process.env.NODE_ENV !== 'production' ? e.stack : undefined });
+            }
+        }
     }
 
     const client = new ImageAnnotatorClient();
