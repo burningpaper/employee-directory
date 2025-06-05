@@ -435,7 +435,7 @@ function safeConvertToISO(dateString: string | undefined | null): string | null 
 }
 
 // Import the extraction function from the new module
-import { extractWorkExperienceFromImage } from './linkedin-extractor.js';
+import { extractWorkExperienceFromPdfData } from './linkedin-extractor.js';
 
 const processLinkedInButton = el('processLinkedIn');
 const linkedInOutputElement = el('linkedInOutput');
@@ -449,7 +449,7 @@ processLinkedInButton?.addEventListener('click', async () => {
   }
 
   if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = true;
-  if (linkedInOutputElement) linkedInOutputElement.textContent = "Processing LinkedIn screenshot, please wait...";
+  if (linkedInOutputElement) linkedInOutputElement.textContent = "Processing LinkedIn PDF, please wait...";
 
   const fileInput = el('linkedinUpload') as HTMLInputElement | null;
   const file = fileInput?.files?.[0];
@@ -462,8 +462,8 @@ processLinkedInButton?.addEventListener('click', async () => {
   }
 
   if (!file) {
-    alert('Upload a screenshot first.');
-    if (linkedInOutputElement) linkedInOutputElement.textContent = "Please upload a screenshot.";
+    alert('Upload a PDF first.');
+    if (linkedInOutputElement) linkedInOutputElement.textContent = "Please upload a PDF.";
     if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
     return;
   }
@@ -476,7 +476,7 @@ processLinkedInButton?.addEventListener('click', async () => {
     let parsed;
     try {
       // Call the external function to get parsed data
-      parsed = await extractWorkExperienceFromImage(base64);
+      parsed = await extractWorkExperienceFromPdfData(base64);
     } catch (error: any) {
       console.error('Error calling extractWorkExperienceFromImage:', error);
       const errorMessage = error.message || 'Failed to extract experience from image. Check console for details.';
@@ -520,3 +520,9 @@ processLinkedInButton?.addEventListener('click', async () => {
 
   reader.readAsDataURL(file);
 });
+
+// Ensure the file input accepts PDFs
+const linkedInUploadInput = el('linkedinUpload') as HTMLInputElement | null;
+if (linkedInUploadInput) {
+    linkedInUploadInput.accept = ".pdf";
+}
