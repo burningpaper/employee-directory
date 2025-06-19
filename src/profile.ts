@@ -1,540 +1,185 @@
-// src/profile.ts – Full version with LinkedIn image processing and Airtable integration
-const $ = (sel: string) => document.querySelector(sel);
-// Refined 'el' function for better type safety.
-// It now returns HTMLElement | null, and specific usages should cast if necessary.
-const el = (id: string): HTMLElement | null => document.getElementById(id);
+// src/profile.ts – robust binding (no optional chaining), waits for DOMContentLoaded
+console.log('profile.ts script parsing started...'); // <-- ADD THIS LINE
+//-------------------------------------------------------------
+const $ = (id: string) => document.getElementById(id) as HTMLElement | null;
 
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID.trim();
-const TOKEN = import.meta.env.VITE_AIRTABLE_PAT.trim();
-const OPENAI_KEY = import.meta.env.VITE_OPENAI_KEY?.trim(); // Get OpenAI Key
+// 1️⃣ Env vars (Vite)
+export const BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID ?? '').trim();
+export const TOKEN   = (import.meta.env.VITE_AIRTABLE_PAT ?? '').trim();
+if (!BASE_ID || !TOKEN) throw new Error('Missing Airtable env vars');
 
+// 2️⃣ Tables
+const EMP_TABLE   = 'Employee Database';
+const SKILL_TABLE = 'Skills';
 
-const HEADERS = {
-  Authorization: `Bearer ${TOKEN}`,
-  'Content-Type': 'application/json'
-};
-const api = (tbl: string, q = '') => `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tbl)}${q}`;
-const get = async (u: string) => {
-  console.log('Attempting to GET URL:', u); // <--- ADD THIS LINE
-  const r = await fetch(u, { headers: HEADERS, cache: 'no-store' }); // Added cache: 'no-store'
-  if (!r.ok) throw new Error(`Airtable API Error: ${r.status} ${await r.text()}`);
+// 3️⃣ Helpers
+const authHeaders = { Authorization: `Bearer ${TOKEN}` };
+const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
+const getJSON = async (url: string) => {
+  const r = await fetch(url, { headers: authHeaders });
+  if (!r.ok) throw new Error(await r.text());
   return r.json();
 };
-const post = (t: string, b: any) => fetch(api(t), { method: 'POST', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
-const patch = (t: string, b: any) => fetch(api(t), { method: 'PATCH', headers: HEADERS, body: JSON.stringify(b) }).then(r => r.json());
 
-async function createRecordsInBatches(tableName: string, records: Array<{ fields: any }>): Promise<any[]> {
-  if (records.length === 0) return [];
-  const allCreatedRecords: any[] = [];
-  for (let i = 0; i < records.length; i += 10) {
-    const chunk = records.slice(i, i + 10);
-    console.log(`Attempting to POST to ${tableName}, batch ${Math.floor(i/10) + 1}, ${chunk.length} records`);
-    const response = await post(tableName, { records: chunk });
-    // Assuming response.records contains the array of created records from Airtable
-    if (response.records && Array.isArray(response.records)) {
-        allCreatedRecords.push(...response.records);
-    } else if (response.error) {
-        console.error(`Error creating records in batch for ${tableName}:`, response.error);
-        throw new Error(`Airtable API Error (Batch Create): ${response.error.type} - ${response.error.message}`);
-    } else {
-        console.warn(`Unexpected response format during batch create for ${tableName}:`, response);
-        // If individual records in the response have IDs, try to collect them
-        if(Array.isArray(response)) allCreatedRecords.push(...response.filter(r => r.id));
-    }
-  }
-  return allCreatedRecords;
+function fmt(d?: string) {
+  return d ? new Date(d).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' }) : '';
 }
 
-async function deleteRecordsInBatches(tableName: string, recordIds: string[]): Promise<void> {
-  if (recordIds.length === 0) return;
-  for (let i = 0; i < recordIds.length; i += 10) {
-    const chunk = recordIds.slice(i, i + 10);
-    const queryParams = chunk.map(id => `records[]=${encodeURIComponent(id)}`).join('&');
-    const url = api(tableName, `?${queryParams}`);
-    console.log('Attempting to DELETE URL:', url);
-    const r = await fetch(url, { method: 'DELETE', headers: HEADERS });
-    if (!r.ok) throw new Error(`Airtable API Error (Batch DELETE): ${r.status} ${await r.text()}`);
-    // Delete typically returns { records: [ { id: "...", deleted: true } ] } or similar
-    console.log(`Batch delete response for ${tableName}:`, await r.json());
+// 4️⃣ toggle UI
+function toggleEdit(on: boolean) {
+  const editBtn   = $('editBtn');
+  const saveBtn   = $('saveBtn');
+  const cancelBtn = $('cancelBtn');
+  if (editBtn && saveBtn && cancelBtn) {
+    editBtn.style.display   = on ? 'none' : '';
+    saveBtn.style.display   = on ? '' : 'none';
+    cancelBtn.style.display = on ? '' : 'none';
+  }
+  const title = $('emp-title');
+  const bio   = $('emp-bio');
+  const phone = $('emp-phone');
+  if (!title || !bio || !phone) return;
+  if (on) {
+    title.innerHTML = `<input id="editTitle" class="w-full border rounded px-2 py-1" value="${title.textContent}">`;
+    bio.innerHTML   = `<textarea id="editBio" class="w-full border rounded px-2 py-1" rows="4">${bio.textContent}</textarea>`;
+    phone.innerHTML = `<input id="editPhone" class="w-full border rounded px-2 py-1" value="${phone.textContent}">`;
+  } else {
+    const t = $('editTitle') as HTMLInputElement | null;
+    const b = $('editBio')   as HTMLTextAreaElement | null;
+    const p = $('editPhone') as HTMLInputElement | null;
+    if (t) title.textContent = t.value;
+    if (b) bio.textContent   = b.value;
+    if (p) phone.textContent = p.value;
   }
 }
 
-const EMP_TABLE = 'Employee Database';
-const SKILL_TABLE = 'Skills';
-const TRAIT_TABLE = 'Traits';
-const EXP_TABLE = 'Work Experience';
-const SKILL_LEVELS_TABLE = 'Skill Levels'; // <-- New table for skill proficiency
-const CLIENT_TABLE = 'Client Experience';
-
-function showModal(html: string) {
-  el('modalContent').innerHTML = html;
-  el('modal')?.classList.remove('hidden');
+async function saveEdits(recordId: string) {
+  const t = $('editTitle') as HTMLInputElement | null;
+  const b = $('editBio')   as HTMLTextAreaElement | null;
+  const p = $('editPhone') as HTMLInputElement | null;
+  if (!t || !b || !p) return;
+  const body = JSON.stringify({
+    records: [{ id: recordId, fields: { 'Job Title': t.value, Bio: b.value, Phone: p.value } }]
+  });
+  const r = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}`, {
+    method: 'PATCH', headers: jsonHeaders, body
+  });
+  if (r.ok) toggleEdit(false); else console.error(await r.text());
 }
-function closeModal() {
-  el('modal')?.classList.add('hidden');
-  el('modalContent')!.innerHTML = ''; // Assuming modalContent always exists when this is called
-}
-el('modal')?.addEventListener('click', e => {
-  if ((e.target as HTMLElement).id === 'modal') closeModal();
-});
 
+// 5️⃣ On DOM ready
 window.addEventListener('DOMContentLoaded', async () => {
-  const recordId = new URLSearchParams(window.location.search).get('id');
+  console.log('DOMContentLoaded event fired. Setting up profile page...');
+  // --- PDF Processing Elements ---
+  const pdfUploader = document.getElementById('linkedinPdfUploader') as HTMLInputElement | null;
+  const processPdfButton = document.getElementById('processPdfButton') as HTMLButtonElement | null;
+  const experienceOutput = document.getElementById('experienceOutput') as HTMLPreElement | null;
 
-  if (!recordId) {
-    console.error("Employee ID not found in URL.");
-    // Optionally, display an error message to the user in the UI
-    const profileNameEl = el('emp-name');
-    if (profileNameEl) profileNameEl.textContent = "Employee not found.";
-    return;
+  // Bind static buttons
+  const editBtn   = $('editBtn');
+  const cancelBtn = $('cancelBtn');
+  if (editBtn) {
+    console.log('Edit button found. Attaching listener.');
+    editBtn.addEventListener('click', () => toggleEdit(true));
+  }
+  if (cancelBtn) {
+    console.log('Cancel button found. Attaching listener.');
+    cancelBtn.addEventListener('click', () => toggleEdit(false));
   }
 
+  // Load data
+  const recordId = new URLSearchParams(location.search).get('id');
+  if (!recordId) return;
   try {
-    const emp = await get(api(EMP_TABLE, '/' + recordId));
+    const emp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
     const f = emp.fields;
 
-    // IDs from profile.html
-    el('emp-name')!.textContent = f['Employee Name'] || f['Full Name'] || ''; // Adjusted to check common field names
-    el('emp-title')!.textContent = f['Job Title'] || f['Title'] || '';
-    // Define readableEmployeeCode once, as it's used by multiple sections
-    // Ensure 'Employee Code' is the correct field name from your 'Employee Database' table
-    // that holds the human-readable employee code (e.g., _2CIN001).
-    const readableEmployeeCode = f['Employee Code'];
-    // el('profileLocation').textContent = f['Location'] || ''; // No direct match in profile.html, emp-meta is used
-    el('emp-meta')!.textContent = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
-    el('emp-bio')!.textContent = f['Bio'] || f['Profile Blurb'] || '';
-    if (f['Profile Photo']?.[0]?.url) (el('emp-photo') as HTMLImageElement).src = f['Profile Photo'][0].url;
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent  = f['Employee Name'];
 
-    // --- Display Skills with Levels ---
-    // 1. Fetch all skills to create a Skill ID -> Skill Name map
-    const allSkillsResponse = await get(api(SKILL_TABLE, '?fields%5B%5D=Skill%20Name&pageSize=100')); // Adjust pageSize if you have >100 skills
-    const skillsMap = new Map<string, string>();
-    allSkillsResponse.records.forEach((skillRecord: any) => {
-      if (skillRecord.fields['Skill Name']) {
-        skillsMap.set(skillRecord.id, skillRecord.fields['Skill Name']);
-      }
-    });
+    const empTitleEl = $('emp-title');
+    if (empTitleEl) empTitleEl.textContent = f['Job Title'] || '';
 
-    // 2. Fetch Skill Level entries for the current employee
-    // Assumes 'Skill Levels' table has a field named 'Employee' linking to 'Employee Database'
-    // and a field 'Skill' linking to 'Skills' table, and a field 'Level' for proficiency.
-    // The field in 'Skill Levels' linking to 'Employee Database' is assumed to be 'Employee Code'
-    // based on previous fixes. We should search using readableEmployeeCode.
-    console.log(`DIAGNOSTIC: readableEmployeeCode for Skill Levels query: '${readableEmployeeCode}'`);
+    const empMetaEl = $('emp-meta');
+    if (empMetaEl) empMetaEl.textContent  = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
 
-    let employeeSkillLevelsResponse = { records: [] };
-    if (readableEmployeeCode) {
-      const skillLevelsQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
-    // You might want to add sorting here, e.g., &sort[0][field]=LookupSkillName&sort[0][direction]=asc
-    // if you have a lookup field for Skill Name in the 'Skill Levels' table.
-      employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
-    } else {
-      console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter skill levels.`);
+    const empBioEl = $('emp-bio');
+    if (empBioEl) empBioEl.textContent   = f.Bio || '';
+
+    const empPhotoEl = $('emp-photo');
+    if (empPhotoEl) empPhotoEl.setAttribute('src', (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128');
+
+    const empPhoneEl = $('emp-phone');
+    if (empPhoneEl) empPhoneEl.textContent = f.Phone || '';
+
+    const empStartEl = $('emp-start');
+    if (empStartEl) empStartEl.textContent = fmt(f['Employee Start Date']);
+
+    // skills
+    const skills = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SKILL_TABLE)}?pageSize=3`);
+    const empSkillsEl = $('emp-skills');
+    // simple demo chip - ensure empSkillsEl exists
+    if (empSkillsEl) {
+        skills.records.slice(0,3).forEach((r: any)=> empSkillsEl.insertAdjacentHTML('beforeend', `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${r.fields['Skill Name']}</span>`));
     }
 
-    const skillsContainer = el('emp-skills');
-    if (skillsContainer) skillsContainer.innerHTML = ''; // Clear current content
+    const saveBtn = $('saveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveEdits(recordId));
+  } catch (e) {
+    console.error("Error loading employee data:", e);
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent = "Error loading profile.";
+  }
 
-
-    const displayedSkillElements: string[] = [];
-    if (employeeSkillLevelsResponse?.records?.length > 0) {
-      for (const slRecord of employeeSkillLevelsResponse.records) {
-        const fields = slRecord.fields;
-        // Ensure 'Skill' is the correct field name in 'Skill Levels' linking to the 'Skills' table
-        const skillLinkArray = fields['Skill'] as string[]; // Expecting an array of Skill record IDs
-        // Ensure 'Level' is the correct field name in 'Skill Levels' for the proficiency
-        const level = fields['Level'] as string;
-
-        if (skillLinkArray && skillLinkArray.length > 0 && level) {
-          const skillId = skillLinkArray[0];
-          const skillName = skillsMap.get(skillId);
-          if (skillName) {
-            displayedSkillElements.push(`<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${skillName} (${level})</span>`);
-          }
+  // --- PDF Processing Logic ---
+  if (pdfUploader && processPdfButton && experienceOutput) {
+    console.log('PDF processing elements found. Attaching click listener to processPdfButton.');
+    processPdfButton.addEventListener('click', async () => {
+        console.log('processPdfButton clicked!');
+        if (!pdfUploader.files || pdfUploader.files.length === 0) {
+            experienceOutput.textContent = 'Please select a PDF file first.';
+            console.log('No PDF file selected.');
+            return;
         }
-      }
-    }
 
-    if (skillsContainer) {
-      if (displayedSkillElements.length > 0) {
-        // Sort skills alphabetically before displaying
-        displayedSkillElements.sort((a, b) => a.localeCompare(b));
-        skillsContainer.innerHTML = displayedSkillElements.join(' ');
-      } else {
-        skillsContainer.textContent = 'No skills listed.';
-      }
-    }
-    // --- End Display Skills with Levels ---
+        const file = pdfUploader.files[0];
+        const formData = new FormData();
+        formData.append('linkedinPdf', file); // Name must match what backend expects
 
-    // --- Display Personality Traits ---
-    // 1. Fetch all traits to create a Trait ID -> Trait Name map
-    // This assumes your 'Traits' table has a field named 'Trait Name'.
-    const allTraitsResponse = await get(api(TRAIT_TABLE, '?fields%5B%5D=Trait%20Name&pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name&sort%5B0%5D%5Bdirection%5D=asc')); // Adjust pageSize if you have >100 traits
-    const traitsMap = new Map<string, string>();
-    allTraitsResponse.records.forEach((traitRecord: any) => {
-      if (traitRecord.fields['Trait Name']) {
-        traitsMap.set(traitRecord.id, traitRecord.fields['Trait Name']);
-      }
-    });
+        experienceOutput.textContent = 'Processing PDF... Please wait.';
+        processPdfButton.disabled = true;
+        console.log('Attempting to fetch /api/process-linkedin-pdf');
 
-    // 2. Get trait IDs from the employee record.
-    // This assumes the field in 'Employee Database' linking to 'Traits' is 'Personality Traits'.
-    const employeeTraitIDs = f['Personality Traits'] as string[] || [];
+        try {
+            const response = await fetch('/api/process-linkedin-pdf', {
+                method: 'POST',
+                body: formData,
+            });
+            console.log('Fetch response received:', response.status);
 
-    const traitsList = el('emp-traits') as HTMLUListElement | null; // Assuming it's a UL based on comment
-    if (traitsList) {
-      traitsList.innerHTML = ''; // Clear existing content
-      const displayedTraitNames: string[] = [];
-
-      if (employeeTraitIDs.length > 0) {
-        employeeTraitIDs.forEach((traitId: string) => {
-          const traitName = traitsMap.get(traitId);
-          if (traitName) {
-            displayedTraitNames.push(traitName);
-          }
-        });
-      }
-
-      if (displayedTraitNames.length > 0) {
-        // Names are already sorted from the API call, but if not, you could sort here: displayedTraitNames.sort();
-        displayedTraitNames.forEach((name: string) => {
-          traitsList.innerHTML += `<li class="text-sm text-gray-600">${name}</li>`;
-        });
-      } else {
-        traitsList.innerHTML = '<li class="text-sm text-gray-600">None listed</li>';
-      }
-    }
-    // --- End Display Personality Traits ---
-
-    // Fetch Work Experience - Simplified filterByFormula
-    // Assumes {Employee} in Work Experience table is the linked record field to Employee Database
-    // ❗ IMPORTANT: Replace {ActualLinkFieldName} with the real name of the field in your 'Work Experience' table that links to the 'Employee Database' table.
-    // Example: If your linking field is named "Employee Link", use {Employee Link}
-
-    // --- DIAGNOSTIC: Fetch a few Work Experience records to inspect 'Employee Code' links ---
-    console.log("DIAGNOSTIC: Fetching first 5 Work Experience records to inspect 'Employee Code' links...");
-    const allWorkExpDiagnosticQuery = `?maxRecords=5`; // Fetches first 5 records from the default view
-    try {
-      const allExpData = await get(api(EXP_TABLE, allWorkExpDiagnosticQuery));
-      console.log('DIAGNOSTIC: Raw Work Experience Data (first 5 records):', JSON.parse(JSON.stringify(allExpData.records))); // Deep copy for logging
-      allExpData.records.forEach((expRecord: any, index: number) => {
-        console.log(`DIAGNOSTIC: Record ${index + 1} (ID: ${expRecord.id}):`);
-        if (expRecord.fields['Employee Code'] && Array.isArray(expRecord.fields['Employee Code'])) {
-          console.log(`  Linked 'Employee Code' IDs:`, expRecord.fields['Employee Code']);
-        } else {
-          console.log(`  'Employee Code' field is empty, not present, or not an array.`);
+            if (response.ok) {
+                const data = await response.json();
+                experienceOutput.textContent = JSON.stringify(data.job_experiences || data, null, 2);
+            } else {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    experienceOutput.textContent = `Error: ${response.status} - ${errorData.error || 'Failed to process PDF.'}\nDetails: ${errorData.details || 'N/A'}`;
+                    console.error('Server error during PDF processing (JSON):', errorData);
+                } else {
+                    const errorText = await response.text();
+                    experienceOutput.textContent = `Error: ${response.status} - Server returned non-JSON response. Check backend logs. Response: ${errorText.substring(0, 200)}...`;
+                    console.error('Server error during PDF processing (non-JSON):', errorText);
+                }
+            }
+        } catch (error) {
+            experienceOutput.textContent = 'An unexpected error occurred while sending the PDF processing request.';
+            console.error('Fetch error during PDF processing:', error);
+        } finally {
+            processPdfButton.disabled = false;
         }
-      });
-    } catch (diagError) {
-      console.error("DIAGNOSTIC: Error fetching all work experience:", diagError);
-    }
-    // --- END DIAGNOSTIC ---
-
-
-    let exp = { records: [] }; // Default to empty records
-
-    if (readableEmployeeCode) {
-      console.log(`Fetching work experience for readableEmployeeCode: '${readableEmployeeCode}' (from recordId: '${recordId}')`);
-      // Filter by searching for the readableEmployeeCode within the ARRAYJOIN'ed primary field values of linked Employee Code records
-      const workExpQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
-      exp = await get(api(EXP_TABLE, workExpQuery));
-    } else {
-      console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter work experience by it.`);
-    }
-
-    console.log('Work Experience API Response (filtered):', exp);
-    const expList = el('emp-experience');
-    if (expList) expList.innerHTML = '';
-    for (const e of exp.records) {
-      const d = e.fields;
-      const from = d['Start Date']?.split('T')[0] || '';
-      const to = d['End Date']?.split('T')[0] || 'Present';
-      const role = d['Role'] || 'Unknown'; // Changed to match LinkedIn import field name
-      const co = d['Company'] || 'Unknown';
-      const para = document.createElement('div');
-      para.innerHTML = `<h4 class="font-medium text-gray-800">${role} at ${co}</h4><p class="text-xs text-gray-500">${from} – ${to}</p><p class="mt-1 text-sm text-gray-600">${d['Description']||''}</p>`;
-      expList?.appendChild(para);
-    }
-
-    // Fetch and render Client Experience
-    let clientExp = { records: [] };
-    if (readableEmployeeCode) {
-      console.log(`Fetching client experience for readableEmployeeCode: '${readableEmployeeCode}'`);
-      // The linking field in 'Client Experience' table is 'Employee Database'
-      // The Airtable error "Unknown field name: "Last Year"" means the field specified for sorting
-      // doesn't match a field name in your 'Client Experience' table.
-      // Please verify the correct field name in your Airtable base and update it below.
-      const clientExpQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Database}))&sort[0][field]=Year Last Worked&sort[0][direction]=desc`;
-      clientExp = await get(api(CLIENT_TABLE, clientExpQuery));
-    } else {
-      console.warn(`Readable employee code not found for employee ${recordId}. Cannot filter client experience.`);
-    }
-
-    console.log('Client Experience API Response (filtered):', clientExp);
-    const clientListBody = el('emp-clients');
-    if (clientListBody) clientListBody.innerHTML = ''; // Clear previous entries
-
-    for (const ce of clientExp.records) {
-      const d = ce.fields;
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="px-4 py-3 whitespace-nowrap">${d['Client Name'] || 'N/A'}</td>
-        <td class="px-4 py-3 whitespace-nowrap">${d['Industry'] || 'N/A'}</td>
-        <td class="px-4 py-3 whitespace-nowrap">${d['Years Experience'] || d['Years'] || 'N/A'}</td> 
-        <td class="px-4 py-3 whitespace-nowrap">${d['Last Year'] || 'N/A'}</td>
-      `;
-      clientListBody?.appendChild(row);
-    }
-
-    // Add event listeners for edit buttons, passing the recordId
-    // For openSkillsModal, we pass employee's recordId and readableEmployeeCode
-    el('editSkillsBtn')?.addEventListener('click', () => openSkillsModal(recordId, readableEmployeeCode));
-    const currentTraitIDs = f['Personality Traits'] || [];
-    el('editTraitsBtn')?.addEventListener('click', () => openTraitsModal(currentTraitIDs, recordId));
-
-  } catch (error) {
-    console.error("Error loading profile data:", error);
-    const profileNameEl = el('emp-name') ;
-    if (profileNameEl) profileNameEl.textContent = "Error loading profile.";
+    });
+  } else {
+    console.warn('One or more PDF processing elements (linkedinPdfUploader, processPdfButton, or experienceOutput) were NOT found in the DOM. Button will not work.');
   }
 });
-
-const SKILL_LEVEL_OPTIONS = ["", "Basic", "Average", "Good", "Excellent"]; // "" for "None"
-
-async function openSkillsModal(employeeRecordId: string, readableEmployeeCode: string) {
-  // 1. Fetch all available skills
-  const allSkillsResponse = await get(api(SKILL_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Skill%20Name&sort%5B0%5D%5Bdirection%5D=asc'));
-  const allSkills = allSkillsResponse.records;
-
-  // 2. Fetch employee's current skill levels
-  let currentEmployeeSkillLevels = [];
-  const existingSkillLevelRecordsMap = new Map<string, { level: string, recordId: string }>(); // Maps Skill ID to its level and SkillLevel record ID
-
-  if (readableEmployeeCode) {
-    const skillLevelsQuery = `?filterByFormula=SEARCH('${readableEmployeeCode}', ARRAYJOIN({Employee Code}))`;
-    const employeeSkillLevelsResponse = await get(api(SKILL_LEVELS_TABLE, skillLevelsQuery));
-    currentEmployeeSkillLevels = employeeSkillLevelsResponse.records || [];
-
-    currentEmployeeSkillLevels.forEach((sl: any) => {
-      const skillId = sl.fields['Skill']?.[0]; // Assuming 'Skill' is a link and returns an array of IDs
-      const level = sl.fields['Level'];
-      if (skillId && level) {
-        existingSkillLevelRecordsMap.set(skillId, { level, recordId: sl.id });
-      }
-    });
-  }
-
-  // 3. Build modal HTML
-  let skillsHtml = '';
-  allSkills.forEach((skill: any) => {
-    const skillId = skill.id;
-    const skillName = skill.fields['Skill Name'];
-    const currentLevelData = existingSkillLevelRecordsMap.get(skillId);
-    const currentLevelValue = currentLevelData ? currentLevelData.level : "";
-
-    let levelOptionsHtml = SKILL_LEVEL_OPTIONS.map(levelOpt =>
-      `<option value="${levelOpt}" ${levelOpt === currentLevelValue ? 'selected' : ''}>${levelOpt || '--- None ---'}</option>`
-    ).join('');
-
-    skillsHtml += `
-      <div class="flex items-center justify-between py-2 border-b border-gray-200">
-        <span class="text-sm text-gray-700">${skillName}</span>
-        <select data-skill-id="${skillId}" class="skill-level-select border rounded px-2 py-1 text-sm">
-          ${levelOptionsHtml}
-        </select>
-      </div>
-    `;
-  });
-
-  showModal(
-    `<h2 class="text-lg font-semibold mb-4">Edit Skills & Levels</h2>
-     <div class="space-y-1 mb-6 max-h-96 overflow-y-auto">${skillsHtml}</div>
-     <div class="flex justify-end gap-2">
-       <button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-       <button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button>
-     </div>`
-  );
-
-  el('mCancel')!.onclick = closeModal;
-  el('mSave')!.onclick = async () => {
-    const skillLevelSelects = document.querySelectorAll('.skill-level-select');
-    const recordsToCreate: Array<{ fields: any }> = [];
-    skillLevelSelects.forEach(selectEl => { // NodeListOf<Element>
-      const select = selectEl as HTMLSelectElement;
-      const skillId = select.dataset.skillId;
-      const level = select.value;
-      if (skillId && level) { // Only add if a level (not "None") is selected
-        recordsToCreate.push({
-          fields: {
-            "Skill": [skillId],
-            "Level": level,
-            "Employee Code": [employeeRecordId] // Link to the Employee Database record
-          }
-        });
-      }
-    });
-
-    // Delete all existing skill level records for this employee
-    const existingRecordIdsToDelete = Array.from(existingSkillLevelRecordsMap.values()).map(val => val.recordId);
-    if (existingRecordIdsToDelete.length > 0) {
-      await deleteRecordsInBatches(SKILL_LEVELS_TABLE, existingRecordIdsToDelete);
-    }
-
-    // Create new skill level records
-    if (recordsToCreate.length > 0) {
-      await createRecordsInBatches(SKILL_LEVELS_TABLE, recordsToCreate);
-    }
-
-    closeModal();
-    location.reload();
-  };
-}
-
-async function openTraitsModal(currentIDs: string[], recordId: string) {
-  const { records } = await get(api(TRAIT_TABLE, '?pageSize=100&sort%5B0%5D%5Bfield%5D=Trait%20Name&sort%5B0%5D%5Bdirection%5D=asc'));
-  // Records are already sorted by 'Trait Name' from the API query.
-  // If not, you could sort here:
-  // const rows = records.sort((a: any, b: any) => a.fields['Trait Name'].localeCompare(b.fields['Trait Name']));
-  const rows = records; // Assuming API sort is sufficient
-  const opts = rows.map((r: any) => `<label class="flex items-center gap-2"><input type="checkbox" value="${r.id}" ${currentIDs.includes(r.id) ? 'checked' : ''} class="traitChk">${r.fields['Trait Name']}</label>`).join('<br>');
-  showModal(`<h2 class="text-lg font-semibold mb-4">Edit Personality Traits</h2><div class="space-y-2 mb-6 max-h-60 overflow-y-auto">${opts}</div><div class="flex justify-end gap-2"><button id="mCancel" class="px-3 py-1 bg-gray-200 rounded">Cancel</button><button id="mSave" class="px-3 py-1 bg-indigo-600 text-white rounded">Save</button></div>`);
-  el('mCancel')!.onclick = closeModal;
-  el('mSave')!.onclick = async () => {
-    const newIDs = [...document.querySelectorAll('.traitChk:checked')].map((c: any) => c.value);
-    await patch(EMP_TABLE, { records: [{ id: recordId, fields: { 'Personality Traits': newIDs } }] });
-    closeModal();
-    location.reload();
-  };
-}
-
-// Moved and updated safeConvertToISO to be a top-level function
-function safeConvertToISO(dateString: string | undefined | null): string | null {
-  if (!dateString || typeof dateString !== 'string') {
-    console.log('safeConvertToISO input: (skipped, not a string or falsy)', dateString);
-    return null;
-  }
-  const trimmedDateString = dateString.trim();
-  const lowerDateString = trimmedDateString.toLowerCase();
-
-  if (lowerDateString === 'present' || lowerDateString === '') {
-    console.log(`safeConvertToISO input: "${trimmedDateString}" (interpreted as no date/present)`);
-    return null;
-  }
-  const date = new Date(trimmedDateString);
-  if (isNaN(date.getTime())) {
-    console.warn(`safeConvertToISO: Invalid date string encountered: "${trimmedDateString}". new Date() resulted in NaN.`);
-    return null;
-  }
-  // Format as YYYY-MM-DD for Airtable date fields
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
-  const day = date.getDate().toString().padStart(2, '0');
-  const formattedDate = `${year}-${month}-${day}`;
-  console.log(`safeConvertToISO input: "${trimmedDateString}", Converted to: "${formattedDate}"`);
-  return formattedDate;
-}
-
-// Import the extraction function from the new module
-import { extractWorkExperienceFromPdfData } from './linkedin-extractor.js';
-
-const processLinkedInButton = el('processLinkedIn');
-const linkedInOutputElement = el('linkedInOutput');
-
-processLinkedInButton?.addEventListener('click', async () => {
-  if (!OPENAI_KEY) {
-    console.error("OpenAI API Key (VITE_OPENAI_KEY) is not set in environment variables.");
-    alert("OpenAI API Key is not configured. LinkedIn import feature is disabled.");
-    if (linkedInOutputElement) linkedInOutputElement.textContent = "OpenAI API Key not configured.";
-    return;
-  }
-
-  if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = true;
-  if (linkedInOutputElement) linkedInOutputElement.textContent = "Processing LinkedIn PDF, please wait...";
-
-  const fileInput = el('linkedinUpload') as HTMLInputElement | null;
-  const file = fileInput?.files?.[0];
-  const recordId = new URLSearchParams(window.location.search).get('id'); // Get recordId again or pass it if this function is called from a context where it's available
-  if (!recordId) {
-    alert('Employee ID not found. Cannot process LinkedIn data.');
-    if (linkedInOutputElement) linkedInOutputElement.textContent = "Error: Employee ID not found.";
-    if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
-    return;
-  }
-
-  if (!file) {
-    alert('Upload a PDF first.');
-    if (linkedInOutputElement) linkedInOutputElement.textContent = "Please upload a PDF.";
-    if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
-    return;
-  }
-  const reader = new FileReader();
-
-  // const fileType = file.type; // Get the MIME type of the uploaded file (currently unused)
-  reader.onload = async () => {
-    const base64 = (reader.result as string).split(',')[1];
-    const pdfTextOutputElement = el('pdfTextOutput'); // Get reference to the output element
-
-    let extractionResult; // Renamed to reflect it's an object { extractedText, workExperience }
-    try {
-      // Call the external function to get parsed data
-      extractionResult = await extractWorkExperienceFromPdfData(base64);
-    } catch (error: any) {
-      console.error('Error calling extractWorkExperienceFromPdfData:', error);
-      const errorMessage = error.message || 'Failed to extract experience from PDF. Check console for details.';
-      if (linkedInOutputElement) linkedInOutputElement.textContent = errorMessage;
-      // Attempt to display extracted text even if OpenAI parsing fails later or if error occurs after text extraction
-      if (pdfTextOutputElement && extractionResult?.extractedText) {
-        pdfTextOutputElement.textContent = extractionResult.extractedText;
-      }
-      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
-      return;
-    }
-
-    // Display the extracted text on the page
-    if (pdfTextOutputElement && extractionResult?.extractedText) {
-      pdfTextOutputElement.textContent = extractionResult.extractedText;
-    }
-
-    const workExperienceArray = extractionResult?.workExperience; // Access the workExperience array
-
-    // Check if workExperienceArray is actually an array and has items
-    if (!Array.isArray(workExperienceArray) || workExperienceArray.length === 0) {
-      const parseErrorMessage = 'Could not parse work experience from OpenAI, or no work experience was found.';
-      console.warn(parseErrorMessage, "Data from extractor (workExperienceArray):", workExperienceArray);
-      if (linkedInOutputElement) linkedInOutputElement.textContent = parseErrorMessage;
-      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
-      return;
-    }
-    const records = workExperienceArray.map((item: any) => ({ // Use the workExperienceArray for mapping
-      fields: {
-        'Employee Code': [recordId], // Use the fetched recordId
-        'Company': item.Company,                     // Changed to item.Company
-        'Role': item.role,                           // Stays item.role (matches prompt)
-        'Start Date': safeConvertToISO(item["start date"]), // Changed to item["start date"]
-        'End Date': safeConvertToISO(item["end date"]),   // Changed to item["end date"]
-        'Description': item.description || ''        // Stays item.description (matches prompt)
-      }
-    }));
-
-    try {
-      if (linkedInOutputElement) linkedInOutputElement.textContent = "Saving extracted experience to database...";
-      const resp = await createRecordsInBatches(EXP_TABLE, records);
-      console.log('Inserted work experience:', resp);
-      if (linkedInOutputElement) linkedInOutputElement.textContent = "Work experience successfully imported!";
-      alert('Work experience imported. Reloading page.');
-      location.reload();
-    } catch (error) {
-      console.error("Error saving work experience to Airtable:", error);
-      if (linkedInOutputElement) linkedInOutputElement.textContent = "Error saving data to database. Please check console for details.";
-      if (processLinkedInButton) (processLinkedInButton as HTMLButtonElement).disabled = false;
-    }
-  };
-
-  reader.readAsDataURL(file);
-});
-
-// Ensure the file input accepts PDFs
-const linkedInUploadInput = el('linkedinUpload') as HTMLInputElement | null;
-if (linkedInUploadInput) {
-    linkedInUploadInput.accept = ".pdf";
-}
