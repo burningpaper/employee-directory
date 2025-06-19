@@ -6,12 +6,23 @@ import OpenAI from 'openai';
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
+
+// Airtable Configuration - ensure these are set in Vercel environment variables
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_PAT = process.env.AIRTABLE_PAT; // Personal Access Token
+const WORK_EXPERIENCE_TABLE_NAME = 'Work Experience'; // Adjust if your table name is different
+
 let openai; // Declare openai client variable
 
 if (!OPENAI_API_KEY) {
     console.error("FATAL ERROR: OPENAI_API_KEY environment variable is not set. OpenAI client will not be initialized.");
 } else {
     openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+}
+
+if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
+    console.error("FATAL ERROR: AIRTABLE_BASE_ID or AIRTABLE_PAT environment variables are not set. Cannot save to Airtable.");
+    // Depending on requirements, you might want to prevent the function from running further
 }
 
 async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
@@ -67,14 +78,18 @@ async function callOpenAIForExperienceJson(experienceText) {
                 {
                     "role": "system",
                     "content": (
-                        "You are a helpful assistant that extracts structured work history data from LinkedIn Experience sections. "
-                        "Only return valid JSON. No markdown. No explanation. The JSON should be an object with a single key 'job_experiences', "
+                        "You are a helpful assistant that extracts structured work history data from LinkedIn Experience sections. " +
+                        "Only return valid JSON. No markdown. No explanation. The JSON should be an object with a single key 'job_experiences', " +
                         "which is an array of job objects."
                     ),
                 },
                 {
                     "role": "user",
-                    "content": `Extract and return a JSON array of job experiences from this Experience section.\n\nFor each role, include:\n- Company\n- Role Held at the Company\n- Start Date (month and year if available, e.g., "Jan 2020")\n- End Date (month and year if available, or "Present", e.g., "Dec 2022" or "Present")\n- Years Worked There (e.g., "2 yrs 3 mos" or "Less than a year")\n- Brief Description (max 70 words, summarize key responsibilities and achievements)\n\nList each distinct role **separately**, even if from the same company (e.g., promotion from 'Software Engineer' to 'Senior Software Engineer' at the same company should be two entries).\n\nIgnore irrelevant content. Return only a JSON object with a single key "job_experiences".\n\nHere is the text:\n\n${experienceText}`
+                    "content": "Extract and return a JSON array of job experiences from this Experience section.\n\n" +
+                               "For each role, include:\n- Company\n- Role Held at the Company\n- Start Date (month and year if available, e.g., \"Jan 2020\")\n- End Date (month and year if available, or \"Present\", e.g., \"Dec 2022\" or \"Present\")\n- Years Worked There (e.g., \"2 yrs 3 mos\" or \"Less than a year\")\n- Brief Description (max 70 words, summarize key responsibilities and achievements)\n\n" +
+                               "List each distinct role **separately**, even if from the same company (e.g., promotion from 'Software Engineer' to 'Senior Software Engineer' at the same company should be two entries).\n\n" +
+                               "Ignore irrelevant content. Return only a JSON object with a single key \"job_experiences\".\n\n" +
+                               `Here is the text:\n\n${experienceText}`
                 }
             ],
             response_format: { type: "json_object" }, // For newer models that support JSON mode
@@ -99,6 +114,45 @@ async function callOpenAIForExperienceJson(experienceText) {
     }
 }
 
+async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
+    if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
+        console.warn("Airtable credentials not configured. Skipping save to Airtable.");
+        return { success: false, message: "Airtable credentials not configured on server." };
+    }
+    if (!employeeRecordId) {
+        console.warn("Employee Record ID not provided. Skipping save to Airtable.");
+        return { success: false, message: "Employee Record ID not provided." };
+    }
+
+    const recordsToCreate = jobExperiences.map(job => ({
+        fields: {
+            'Company': job.Company,
+            'Role': job['Role Held at the Company'], // Assuming 'Role' is the field name in Airtable
+            'Start Date': job['Start Date'],     // Airtable can often parse common date strings
+            'End Date': job['End Date'],
+            'Description': job['Brief Description'],
+            'Employee Database': [employeeRecordId] // Link to the employee record
+            // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
+        }
+    }));
+
+    if (recordsToCreate.length === 0) {
+        return { success: true, message: "No job experiences to save." };
+    }
+
+    const airtableApiUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(WORK_EXPERIENCE_TABLE_NAME)}`;
+    const response = await fetch(airtableApiUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${AIRTABLE_PAT}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ records: recordsToCreate })
+    });
+
+    return { success: response.ok, status: response.status, data: await response.json() };
+}
+
 export const config = {
     api: {
         bodyParser: false, // Required for formidable to parse multipart/form-data
@@ -111,8 +165,8 @@ export default async function handler(req, res) {
         return res.status(405).end('Method Not Allowed');
     }
 
-    // Check if the openai client was initialized (i.e., if API key was present)
-    if (!openai) {
+    // Check if critical clients/configs were initialized
+    if (!openai || !AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
         return res.status(500).json({ error: "Server configuration error", details: "OpenAI API key not configured or client not initialized." });
     }
 
@@ -125,6 +179,7 @@ export default async function handler(req, res) {
         }
 
         const pdfFile = files.linkedinPdf?.[0];
+        const employeeRecordId = fields.employeeRecordId?.[0]; // Retrieve employeeRecordId
 
         if (!pdfFile) {
             return res.status(400).json({ error: 'No PDF file uploaded. Ensure the file input name is "linkedinPdf".' });
@@ -140,11 +195,23 @@ export default async function handler(req, res) {
             }
 
             const experienceJson = await callOpenAIForExperienceJson(experienceText);
-            res.status(200).json(experienceJson);
+
+            let airtableSaveResult = { success: false, message: "Save to Airtable not attempted." };
+            if (experienceJson && experienceJson.job_experiences && experienceJson.job_experiences.length > 0) {
+                if (!employeeRecordId) {
+                    console.warn("employeeRecordId not received from frontend. Cannot link experience to employee.");
+                    airtableSaveResult = { success: false, message: "Employee ID not provided for Airtable linking."};
+                } else {
+                    airtableSaveResult = await saveExperienceToAirtable(employeeRecordId, experienceJson.job_experiences);
+                    console.log("Airtable save result:", airtableSaveResult);
+                }
+            }
+
+            res.status(200).json({ ...experienceJson, airtableSaveStatus: airtableSaveResult });
 
         } catch (error) {
             console.error('Error processing PDF for experience extraction:', error);
-            res.status(500).json({ error: 'Failed to process PDF for experience extraction', details: error.message });
+            res.status(500).json({ error: 'Failed to process PDF for experience extraction', details: error.message, airtableSaveStatus: { success: false, message: "Error occurred before Airtable save attempt."} });
         } finally {
             // Clean up the temporary file uploaded by formidable
             if (pdfFile && pdfFile.filepath) {

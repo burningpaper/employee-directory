@@ -135,6 +135,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (pdfUploader && processPdfButton && experienceOutput) {
     console.log('PDF processing elements found. Attaching click listener to processPdfButton.');
     processPdfButton.addEventListener('click', async () => {
+        console.log('processPdfButton clicked! (Inside listener)');
         console.log('processPdfButton clicked!');
         if (!pdfUploader.files || pdfUploader.files.length === 0) {
             experienceOutput.textContent = 'Please select a PDF file first.';
@@ -145,6 +146,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         const file = pdfUploader.files[0];
         const formData = new FormData();
         formData.append('linkedinPdf', file); // Name must match what backend expects
+        // Add the recordId to the FormData
+        const currentRecordId = new URLSearchParams(location.search).get('id');
+        if (currentRecordId) {
+            formData.append('employeeRecordId', currentRecordId);
+        }
 
         experienceOutput.textContent = 'Processing PDF... Please wait.';
         processPdfButton.disabled = true;
