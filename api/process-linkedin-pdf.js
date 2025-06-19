@@ -1,14 +1,15 @@
 // /Users/jarred/employee-directory/api/process-linkedin-pdf.js
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-// import { createRequire } from 'module'; // No longer needed for this approach
+import { createRequire } from 'module';
 import OpenAI from 'openai';
 
-// Dynamically import the ES Module version of pdfjs-dist
-// The .default is often needed when dynamically importing modules that have a default export
-const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+// Use createRequire to load the CommonJS version of pdfjs-dist,
+// then explicitly disable its worker.
+const require = createRequire(import.meta.url);
+const pdfjsLib = require('pdfjs-dist');
+pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
-// Worker disabling for ES modules is typically handled via getDocument options
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
@@ -37,8 +38,7 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
         const uint8Array = new Uint8Array(pdfBuffer); 
         // Explicitly disable worker for server-side Node.js environment when using ES module build
         const loadingTask = pdfjsLib.getDocument({
-            data: uint8Array,
-            isWorkerDisabled: true // Ensure this option is passed
+            data: uint8Array
         });
         const pdfDocument = await loadingTask.promise;
         let fullText = '';
