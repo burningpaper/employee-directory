@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-gray-100">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Profile</title>
-    <!-- Add any existing styles or link to your stylesheet -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Basic styles from previous version, can be augmented or replaced by Tailwind */
         body { font-family: sans-serif; margin: 20px; }
         h1, h2, h3 { color: #333; }
         label { display: block; margin-top: 10px; }
@@ -34,12 +35,56 @@
             overflow-y: auto;
         }
         hr { margin: 20px 0; }
+
+        /* Tailwind utility classes will override these where applied */
     </style>
 </head>
-<body>
-    <h1>User Profile</h1>
-    <!-- Placeholder for other profile information -->
-    <p>This is where user profile information will go.</p>
+<body class="h-full">
+    <header class="bg-white border-b shadow-sm sticky top-0 z-10">
+        <div class="flex items-center max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
+          <a href="search.html" class="text-xl font-semibold text-indigo-600 hover:text-indigo-700">VML Intranet</a>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h1 id="emp-name" class="text-3xl font-bold text-gray-900">Loading...</h1>
+                <div>
+                    <button id="editBtn" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Edit</button>
+                    <button id="saveBtn" class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" style="display: none;">Save</button>
+                    <button id="cancelBtn" class="ml-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" style="display: none;">Cancel</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1">
+                    <img id="emp-photo" src="https://placehold.co/256" alt="Profile Photo" class="w-full h-auto rounded-lg shadow-md object-cover aspect-square">
+                </div>
+                <div class="md:col-span-2 space-y-4">
+                    <div>
+                        <h2 class="text-sm font-medium text-gray-500">Job Title</h2>
+                        <p id="emp-title" class="mt-1 text-lg text-gray-900">-</p>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-medium text-gray-500">Details</h2>
+                        <p id="emp-meta" class="mt-1 text-gray-700">-</p>
+                        <p id="emp-phone" class="mt-1 text-gray-700">-</p>
+                        <p class="mt-1 text-gray-700">Started: <span id="emp-start">-</span></p>
+                    </div>
+                     <div>
+                        <h2 class="text-sm font-medium text-gray-500">Skills</h2>
+                        <div id="emp-skills" class="mt-1 flex flex-wrap gap-2">
+                            <!-- Skills will be populated here by profile.ts -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6">
+                <h2 class="text-sm font-medium text-gray-500">Bio</h2>
+                <p id="emp-bio" class="mt-1 text-gray-700 whitespace-pre-wrap">-</p>
+            </div>
+        </div>
 
     <hr>
     <h2>Process LinkedIn PDF</h2>
@@ -52,6 +97,8 @@
     <h3>Extracted Experience:</h3>
     <pre id="experienceOutput">No PDF processed yet.</pre>
 
-    <script type="module" src="profile.ts"></script>
+    </main>
+    <footer class="py-6 text-center text-xs text-gray-400">© 2025 VML South Africa • Internal Use Only</footer>
+    <script type="module" src="/src/profile.ts"></script> <!-- Ensure path is correct for your setup -->
 </body>
 </html>

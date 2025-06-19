@@ -85,18 +85,35 @@ window.addEventListener('DOMContentLoaded', async () => {
   try {
     const emp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
     const f = emp.fields;
-    $('emp-name')!.textContent  = f['Employee Name'];
-    $('emp-title')!.textContent = f['Job Title'] || '';
-    $('emp-meta')!.textContent  = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
-    $('emp-bio')!.textContent   = f.Bio || '';
-    $('emp-photo')!.setAttribute('src', (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128');
-    $('emp-phone')!.textContent = f.Phone || '';
-    $('emp-start')!.textContent = fmt(f['Employee Start Date']);
+
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent  = f['Employee Name'];
+
+    const empTitleEl = $('emp-title');
+    if (empTitleEl) empTitleEl.textContent = f['Job Title'] || '';
+
+    const empMetaEl = $('emp-meta');
+    if (empMetaEl) empMetaEl.textContent  = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
+
+    const empBioEl = $('emp-bio');
+    if (empBioEl) empBioEl.textContent   = f.Bio || '';
+
+    const empPhotoEl = $('emp-photo');
+    if (empPhotoEl) empPhotoEl.setAttribute('src', (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128');
+
+    const empPhoneEl = $('emp-phone');
+    if (empPhoneEl) empPhoneEl.textContent = f.Phone || '';
+
+    const empStartEl = $('emp-start');
+    if (empStartEl) empStartEl.textContent = fmt(f['Employee Start Date']);
 
     // skills
     const skills = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SKILL_TABLE)}?pageSize=3`);
-    // simple demo chip
-    skills.records.slice(0,3).forEach((r: any)=> $('emp-skills')!.insertAdjacentHTML('beforeend', `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${r.fields['Skill Name']}</span>`));
+    const empSkillsEl = $('emp-skills');
+    // simple demo chip - ensure empSkillsEl exists
+    if (empSkillsEl) {
+        skills.records.slice(0,3).forEach((r: any)=> empSkillsEl.insertAdjacentHTML('beforeend', `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${r.fields['Skill Name']}</span>`));
+    }
 
     const saveBtn = $('saveBtn');
     if (saveBtn) saveBtn.addEventListener('click', () => saveEdits(recordId));

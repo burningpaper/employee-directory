@@ -4,16 +4,15 @@ import fs from 'fs';
 import pdfParse from 'pdf-parse';
 import OpenAI from 'openai';
 
-// Ensure your OPENAI_API_KEY is set as an environment variable in Vercel
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
+const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
+let openai; // Declare openai client variable
 
 if (!OPENAI_API_KEY) {
-    console.error("FATAL ERROR: OPENAI_API_KEY environment variable is not set.");
+    console.error("FATAL ERROR: OPENAI_API_KEY environment variable is not set. OpenAI client will not be initialized.");
+} else {
+    openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 }
-
-const openai = new OpenAI({
-    apiKey: OPENAI_API_KEY,
-});
 
 async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
     try {
@@ -112,8 +111,9 @@ export default async function handler(req, res) {
         return res.status(405).end('Method Not Allowed');
     }
 
-    if (!OPENAI_API_KEY) {
-        return res.status(500).json({ error: "Server configuration error", details: "OpenAI API key not configured." });
+    // Check if the openai client was initialized (i.e., if API key was present)
+    if (!openai) {
+        return res.status(500).json({ error: "Server configuration error", details: "OpenAI API key not configured or client not initialized." });
     }
 
     const form = new IncomingForm();
