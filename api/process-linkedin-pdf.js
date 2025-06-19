@@ -74,8 +74,8 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
 
         return experienceText.trim();
     } catch (error) {
-        console.error("Error parsing PDF content:", error);
-        throw new Error("Failed to parse PDF content.");
+    console.error("Error parsing PDF content with pdfjs-dist:", error.message, error.stack);
+    throw new Error(`Failed to parse PDF content. Original error: ${error.name} - ${error.message}`);
     }
 }
 
