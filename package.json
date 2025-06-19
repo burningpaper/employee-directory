@@ -15,7 +15,6 @@
     "@google-cloud/vision": "^4.0.2",
     "formidable": "^3.5.1",
     "openai": "^4.0.0",
-    "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^4.8.69",
     "tesseract.js": "^6.0.1"
   }
