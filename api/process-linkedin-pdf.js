@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 
 // Dynamically import the ES Module version of pdfjs-dist
 // The .default is often needed when dynamically importing modules that have a default export
-const { default: pdfjsLib } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
 // Ensure worker is disabled for server-side Node.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = null; // Disable worker for Node.js server-side
