@@ -1,12 +1,14 @@
 // /Users/jarred/employee-directory/api/process-linkedin-pdf.js
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import { createRequire } from 'module';
+// import { createRequire } from 'module'; // No longer needed for this approach
 import OpenAI from 'openai';
 
-// Use createRequire to load the CommonJS version of pdfjs-dist
-const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist'); // Let Node.js resolve via package.json "main"
+// Dynamically import the ES Module version of pdfjs-dist
+// The .default is often needed when dynamically importing modules that have a default export
+const { default: pdfjsLib } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+// Ensure worker is disabled for server-side Node.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = null; // Disable worker for Node.js server-side
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
