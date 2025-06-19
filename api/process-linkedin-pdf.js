@@ -29,7 +29,11 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
     try {
         // Convert Buffer to Uint8Array for pdf.js
         const uint8Array = new Uint8Array(pdfBuffer);
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        // Disable worker usage for server-side Node.js environment
+        const loadingTask = pdfjsLib.getDocument({
+            data: uint8Array,
+            isWorkerDisabled: true // Try to force synchronous/non-worker operations
+        });
         const pdfDocument = await loadingTask.promise;
         let fullText = '';
 
