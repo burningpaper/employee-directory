@@ -9,7 +9,7 @@ const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
 
 // Airtable Configuration - ensure these are set in Vercel environment variables
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const AIRTABLE_PAT = process.env.AIRTABLE_PAT; // Personal Access Token
+const AIRTABLE_PAT = process.env.AIRTABLE_PAT; // Personal Access Token for Airtable
 const WORK_EXPERIENCE_TABLE_NAME = 'Work Experience'; // Adjust if your table name is different
 
 let openai; // Declare openai client variable
@@ -22,7 +22,7 @@ if (!OPENAI_API_KEY) {
 
 if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
     console.error("FATAL ERROR: AIRTABLE_BASE_ID or AIRTABLE_PAT environment variables are not set. Cannot save to Airtable.");
-    // Depending on requirements, you might want to prevent the function from running further
+    // Consider how to handle this: throw an error, or let it proceed and fail at saveExperienceToAirtable
 }
 
 async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
@@ -80,15 +80,15 @@ async function callOpenAIForExperienceJson(experienceText) {
                     "content": (
                         "You are a helpful assistant that extracts structured work history data from LinkedIn Experience sections. " +
                         "Only return valid JSON. No markdown. No explanation. The JSON should be an object with a single key 'job_experiences', " +
-                        "which is an array of job objects."
+                        "which is an array of job objects." // Ensure no trailing invisible characters here
                     ),
                 },
                 {
                     "role": "user",
-                    "content": "Extract and return a JSON array of job experiences from this Experience section.\n\n" +
-                               "For each role, include:\n- Company\n- Role Held at the Company\n- Start Date (month and year if available, e.g., \"Jan 2020\")\n- End Date (month and year if available, or \"Present\", e.g., \"Dec 2022\" or \"Present\")\n- Years Worked There (e.g., \"2 yrs 3 mos\" or \"Less than a year\")\n- Brief Description (max 70 words, summarize key responsibilities and achievements)\n\n" +
-                               "List each distinct role **separately**, even if from the same company (e.g., promotion from 'Software Engineer' to 'Senior Software Engineer' at the same company should be two entries).\n\n" +
-                               "Ignore irrelevant content. Return only a JSON object with a single key \"job_experiences\".\n\n" +
+                    "content": "Extract and return a JSON array of job experiences from this Experience section.\\n\\n" + // Using escaped newlines
+                               "For each role, include:\\n- Company\\n- Role Held at the Company\\n- Start Date (month and year if available, e.g., \"Jan 2020\")\\n- End Date (month and year if available, or \"Present\", e.g., \"Dec 2022\" or \"Present\")\\n- Years Worked There (e.g., \"2 yrs 3 mos\" or \"Less than a year\")\\n- Brief Description (max 70 words, summarize key responsibilities and achievements)\\n\\n" +
+                               "List each distinct role **separately**, even if from the same company (e.g., promotion from 'Software Engineer' to 'Senior Software Engineer' at the same company should be two entries).\\n\\n" +
+                               "Ignore irrelevant content. Return only a JSON object with a single key \"job_experiences\".\\n\\n" +
                                `Here is the text:\n\n${experienceText}`
                 }
             ],
@@ -131,7 +131,7 @@ async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
             'Start Date': job['Start Date'],     // Airtable can often parse common date strings
             'End Date': job['End Date'],
             'Description': job['Brief Description'],
-            'Employee Database': [employeeRecordId] // Link to the employee record
+            'Employee Database': [employeeRecordId] // Link to the employee record in Airtable
             // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
         }
     }));
