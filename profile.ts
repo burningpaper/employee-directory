@@ -148,9 +148,16 @@ window.addEventListener('DOMContentLoaded', async () => {
                 const data = await response.json();
                 experienceOutput.textContent = JSON.stringify(data.job_experiences || data, null, 2);
             } else {
-                const errorData = await response.json();
-                experienceOutput.textContent = `Error: ${response.status} - ${errorData.error || 'Failed to process PDF.'}\nDetails: ${errorData.details || ''}`;
-                console.error('Server error during PDF processing:', errorData);
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    experienceOutput.textContent = `Error: ${response.status} - ${errorData.error || 'Failed to process PDF.'}\nDetails: ${errorData.details || 'N/A'}`;
+                    console.error('Server error during PDF processing (JSON):', errorData);
+                } else {
+                    const errorText = await response.text();
+                    experienceOutput.textContent = `Error: ${response.status} - Server returned non-JSON response. Check backend logs. Response: ${errorText.substring(0, 200)}...`;
+                    console.error('Server error during PDF processing (non-JSON):', errorText);
+                }
             }
         } catch (error) {
             experienceOutput.textContent = 'An unexpected error occurred while sending the PDF processing request.';
