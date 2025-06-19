@@ -2,7 +2,11 @@
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import OpenAI from 'openai';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'; // Using legacy build for broader compatibility
+// Import the CommonJS version for Node.js environments
+import pdfjsLib from 'pdfjs-dist/build/pdf.js';
+
+// Set the worker to null to prevent it from trying to load a separate worker file in Node.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
@@ -31,8 +35,7 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
         const uint8Array = new Uint8Array(pdfBuffer);
         // Disable worker usage for server-side Node.js environment
         const loadingTask = pdfjsLib.getDocument({
-            data: uint8Array,
-            isWorkerDisabled: true // Try to force synchronous/non-worker operations
+            data: uint8Array
         });
         const pdfDocument = await loadingTask.promise;
         let fullText = '';
