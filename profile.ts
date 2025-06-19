@@ -68,6 +68,7 @@ async function saveEdits(recordId: string) {
 
 // 5️⃣ On DOM ready
 window.addEventListener('DOMContentLoaded', async () => {
+  console.log('DOMContentLoaded event fired. Setting up profile page...');
   // --- PDF Processing Elements ---
   const pdfUploader = document.getElementById('linkedinPdfUploader') as HTMLInputElement | null;
   const processPdfButton = document.getElementById('processPdfButton') as HTMLButtonElement | null;
@@ -76,8 +77,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Bind static buttons
   const editBtn   = $('editBtn');
   const cancelBtn = $('cancelBtn');
-  if (editBtn)   editBtn.addEventListener('click', () => toggleEdit(true));
-  if (cancelBtn) cancelBtn.addEventListener('click', () => toggleEdit(false));
+  if (editBtn) {
+    console.log('Edit button found. Attaching listener.');
+    editBtn.addEventListener('click', () => toggleEdit(true));
+  }
+  if (cancelBtn) {
+    console.log('Cancel button found. Attaching listener.');
+    cancelBtn.addEventListener('click', () => toggleEdit(false));
+  }
 
   // Load data
   const recordId = new URLSearchParams(location.search).get('id');
@@ -125,9 +132,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // --- PDF Processing Logic ---
   if (pdfUploader && processPdfButton && experienceOutput) {
+    console.log('PDF processing elements found. Attaching click listener to processPdfButton.');
     processPdfButton.addEventListener('click', async () => {
+        console.log('processPdfButton clicked!');
         if (!pdfUploader.files || pdfUploader.files.length === 0) {
             experienceOutput.textContent = 'Please select a PDF file first.';
+            console.log('No PDF file selected.');
             return;
         }
 
@@ -137,12 +147,14 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         experienceOutput.textContent = 'Processing PDF... Please wait.';
         processPdfButton.disabled = true;
+        console.log('Attempting to fetch /api/process-linkedin-pdf');
 
         try {
             const response = await fetch('/api/process-linkedin-pdf', {
                 method: 'POST',
                 body: formData,
             });
+            console.log('Fetch response received:', response.status);
 
             if (response.ok) {
                 const data = await response.json();
@@ -167,6 +179,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     });
   } else {
-    console.warn('PDF processing elements (linkedinPdfUploader, processPdfButton, or experienceOutput) not found in the DOM.');
+    console.warn('One or more PDF processing elements (linkedinPdfUploader, processPdfButton, or experienceOutput) were NOT found in the DOM. Button will not work.');
   }
 });
