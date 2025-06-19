@@ -1,8 +1,8 @@
 // /Users/jarred/employee-directory/api/process-linkedin-pdf.js
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import pdfParse from 'pdf-parse';
 import OpenAI from 'openai';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'; // Using legacy build for broader compatibility
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
@@ -27,8 +27,22 @@ if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
 
 async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
     try {
-        const data = await pdfParse(pdfBuffer);
-        const fullText = data.text;
+        // Convert Buffer to Uint8Array for pdf.js
+        const uint8Array = new Uint8Array(pdfBuffer);
+        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const pdfDocument = await loadingTask.promise;
+        let fullText = '';
+
+        for (let i = 1; i <= pdfDocument.numPages; i++) {
+            const page = await pdfDocument.getPage(i);
+            const textContent = await page.getTextContent();
+            // textContent.items is an array of text items.
+            // Concatenate them, adding a space for separation.
+            // Handle potential diacritics or special characters by joining item.str
+            fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+        }
+
+        console.log(`Extracted ${fullText.length} characters from PDF using pdfjs-dist.`);
 
         const experienceStart = fullText.toLowerCase().indexOf("experience");
         if (experienceStart === -1) {
