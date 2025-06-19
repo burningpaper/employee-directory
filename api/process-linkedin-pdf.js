@@ -2,11 +2,10 @@
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import OpenAI from 'openai';
-// Import the CommonJS version for Node.js environments
-import pdfjsLib from 'pdfjs-dist/build/pdf.js';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-// Set the worker to null to prevent it from trying to load a separate worker file in Node.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+// For ES modules, worker disabling is usually done via getDocument options
+// pdfjsLib.GlobalWorkerOptions.workerSrc = null; // This is more for CommonJS or global script usage
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
@@ -32,10 +31,11 @@ if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
 async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
     try {
         // Convert Buffer to Uint8Array for pdf.js
-        const uint8Array = new Uint8Array(pdfBuffer);
-        // Disable worker usage for server-side Node.js environment
+        const uint8Array = new Uint8Array(pdfBuffer); 
+        // Explicitly disable worker for server-side Node.js environment when using ES module build
         const loadingTask = pdfjsLib.getDocument({
-            data: uint8Array
+            data: uint8Array,
+            isWorkerDisabled: true
         });
         const pdfDocument = await loadingTask.promise;
         let fullText = '';
