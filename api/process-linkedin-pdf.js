@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 
 // Use createRequire to load the CommonJS version of pdfjs-dist
 const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist/build/pdf.js');
+const pdfjsLib = require('pdfjs-dist'); // Let Node.js resolve via package.json "main"
 pdfjsLib.GlobalWorkerOptions.workerSrc = null; // Disable worker for Node.js server-side
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
