@@ -5,9 +5,9 @@ import { createRequire } from 'module';
 import OpenAI from 'openai';
 
 // Use createRequire to load the CommonJS version of pdfjs-dist,
-// then explicitly disable its worker.
+// specifically targeting the legacy CommonJS build for Node.js.
 const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist');
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); // Explicitly use the CJS legacy build
 pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
 
