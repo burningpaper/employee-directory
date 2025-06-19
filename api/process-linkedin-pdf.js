@@ -8,8 +8,8 @@ import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'; // Using legacy bui
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
 
 // Airtable Configuration - ensure these are set in Vercel environment variables
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const AIRTABLE_PAT = process.env.AIRTABLE_PAT; // Personal Access Token for Airtable
+const AIRTABLE_BASE_ID = process.env.VITE_AIRTABLE_BASE_ID;
+const AIRTABLE_PAT = process.env.VITE_AIRTABLE_PAT; // Personal Access Token for Airtable
 const WORK_EXPERIENCE_TABLE_NAME = 'Work Experience'; // Adjust if your table name is different
 
 let openai; // Declare openai client variable
