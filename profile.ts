@@ -68,6 +68,11 @@ async function saveEdits(recordId: string) {
 
 // 5️⃣ On DOM ready
 window.addEventListener('DOMContentLoaded', async () => {
+  // --- PDF Processing Elements ---
+  const pdfUploader = document.getElementById('linkedinPdfUploader') as HTMLInputElement | null;
+  const processPdfButton = document.getElementById('processPdfButton') as HTMLButtonElement | null;
+  const experienceOutput = document.getElementById('experienceOutput') as HTMLPreElement | null;
+
   // Bind static buttons
   const editBtn   = $('editBtn');
   const cancelBtn = $('cancelBtn');
@@ -96,6 +101,48 @@ window.addEventListener('DOMContentLoaded', async () => {
     const saveBtn = $('saveBtn');
     if (saveBtn) saveBtn.addEventListener('click', () => saveEdits(recordId));
   } catch (e) {
-    console.error(e);
+    console.error("Error loading employee data:", e);
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent = "Error loading profile.";
+  }
+
+  // --- PDF Processing Logic ---
+  if (pdfUploader && processPdfButton && experienceOutput) {
+    processPdfButton.addEventListener('click', async () => {
+        if (!pdfUploader.files || pdfUploader.files.length === 0) {
+            experienceOutput.textContent = 'Please select a PDF file first.';
+            return;
+        }
+
+        const file = pdfUploader.files[0];
+        const formData = new FormData();
+        formData.append('linkedinPdf', file); // Name must match what backend expects
+
+        experienceOutput.textContent = 'Processing PDF... Please wait.';
+        processPdfButton.disabled = true;
+
+        try {
+            const response = await fetch('/api/process-linkedin-pdf', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                experienceOutput.textContent = JSON.stringify(data.job_experiences || data, null, 2);
+            } else {
+                const errorData = await response.json();
+                experienceOutput.textContent = `Error: ${response.status} - ${errorData.error || 'Failed to process PDF.'}\nDetails: ${errorData.details || ''}`;
+                console.error('Server error during PDF processing:', errorData);
+            }
+        } catch (error) {
+            experienceOutput.textContent = 'An unexpected error occurred while sending the PDF processing request.';
+            console.error('Fetch error during PDF processing:', error);
+        } finally {
+            processPdfButton.disabled = false;
+        }
+    });
+  } else {
+    console.warn('PDF processing elements (linkedinPdfUploader, processPdfButton, or experienceOutput) not found in the DOM.');
   }
 });

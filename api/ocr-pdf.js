@@ -22,29 +22,33 @@ export default async function handler(req, res) {
 
     let parsedCredentials;
 
-    // Ensure credentials are set up.
-    // If GOOGLE_APPLICATION_CREDENTIALS_JSON is set in Vercel env vars with the JSON content,
-    // the Vision client library should pick it up.
-    // For local dev, ensure ADC is configured (e.g., `gcloud auth application-default login`)
-    // or GOOGLE_APPLICATION_CREDENTIALS points to your key file.
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-        console.log(`Found GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable.`);
+    // Attempt to load credentials from Base64 encoded JSON
+    if (process.env.GOOGLE_CREDENTIALS_JSON_BASE64) {
+        console.log(`Found GOOGLE_CREDENTIALS_JSON_BASE64 environment variable.`);
         try {
-            parsedCredentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-            console.log("GOOGLE_APPLICATION_CREDENTIALS_JSON was successfully parsed as JSON.");
+            const decodedJson = Buffer.from(process.env.GOOGLE_CREDENTIALS_JSON_BASE64, 'base64').toString('utf-8');
+            parsedCredentials = JSON.parse(decodedJson);
+            console.log("GOOGLE_CREDENTIALS_JSON_BASE64 was successfully decoded and parsed as JSON.");
+
             // Add a basic check for essential properties of a service account key
             if (!parsedCredentials || !parsedCredentials.project_id || !parsedCredentials.client_email || !parsedCredentials.private_key) {
-                console.error("Parsed GOOGLE_APPLICATION_CREDENTIALS_JSON is missing essential service account key properties (project_id, client_email, private_key) or is not an object.");
+                console.error("Decoded and parsed credentials JSON is missing essential service account key properties (project_id, client_email, private_key) or is not an object.");
                 return res.status(500).json({ error: 'Server configuration error: Incomplete or invalid Google Cloud credentials JSON.' });
             }
         } catch (e) {
-            console.error("Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON. This is likely the cause of 'Could not load default credentials'. Check the JSON content in Vercel environment variables.", e.message);
-            return res.status(500).json({ error: 'Server configuration error: Malformed Google Cloud credentials JSON.', details: e.message, stack: process.env.NODE_ENV !== 'production' ? e.stack : undefined });
+            console.error("Error decoding/parsing GOOGLE_CREDENTIALS_JSON_BASE64. This is likely the cause of 'Could not load default credentials'. Check the Base64 encoded JSON content in Vercel environment variables.", e.message);
+            return res.status(500).json({ error: 'Server configuration error: Malformed or invalid Base64 encoded Google Cloud credentials JSON.', details: e.message, stack: process.env.NODE_ENV !== 'production' ? e.stack : undefined });
         }
+    // Fallback for local development using a file path or if GOOGLE_APPLICATION_CREDENTIALS_JSON (raw JSON) is still preferred by some.
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         // This case is for GOOGLE_APPLICATION_CREDENTIALS pointing to a file path.
         // The client will attempt to load this path if parsedCredentials is not set.
         console.log(`Found GOOGLE_APPLICATION_CREDENTIALS environment variable (points to a file path).`);
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+        // This is a fallback if you still have the raw JSON in an old variable.
+        // It's better to use the Base64 method for serverless.
+        console.warn("Found GOOGLE_APPLICATION_CREDENTIALS_JSON (raw JSON). Consider using GOOGLE_CREDENTIALS_JSON_BASE64 for better reliability in serverless environments.");
+        parsedCredentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON); // Assuming it's valid if it exists
     } else {
         console.error("Google Cloud credentials environment variables are NOT set. Please set GOOGLE_APPLICATION_CREDENTIALS_JSON (with JSON content) or GOOGLE_APPLICATION_CREDENTIALS (path to file) environment variable.");
         return res.status(500).json({ error: 'Server configuration error: Google Cloud credentials not set.' });
@@ -79,6 +83,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error calling Google Cloud Vision API:', error);
-    res.status(500).json({ error: 'Failed to process PDF with Google Cloud Vision API', details: error.message, stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined });
+    res.status(500).json({ error: 'Failed to process PDF with Google Cloud Vision API', details: error.message });
   }
 }
