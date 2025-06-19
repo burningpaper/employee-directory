@@ -8,8 +8,7 @@ import OpenAI from 'openai';
 // The .default is often needed when dynamically importing modules that have a default export
 const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-// Ensure worker is disabled for server-side Node.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = null; // Disable worker for Node.js server-side
+// Worker disabling for ES modules is typically handled via getDocument options
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
 const OPENAI_API_KEY = process.env.VITE_OPENAI_KEY;
@@ -38,7 +37,8 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
         const uint8Array = new Uint8Array(pdfBuffer); 
         // Explicitly disable worker for server-side Node.js environment when using ES module build
         const loadingTask = pdfjsLib.getDocument({
-            data: uint8Array
+            data: uint8Array,
+            isWorkerDisabled: true // Ensure this option is passed
         });
         const pdfDocument = await loadingTask.promise;
         let fullText = '';
