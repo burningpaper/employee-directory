@@ -77,8 +77,11 @@ export default async function handler(req, res) {
 
     console.log('Sending request to Google Cloud Vision API...');
     const [result] = await client.batchAnnotateFiles(request);
+    
+    console.log('Raw Google Cloud Vision API result (first response):', JSON.stringify(result.responses[0], null, 2));
+    
     const fullTextAnnotation = result.responses[0]?.fullTextAnnotation;
-
+    console.log('Extracted fullTextAnnotation.text (length ' + (fullTextAnnotation?.text?.length || 0) + '):', (fullTextAnnotation?.text || '').substring(0, 500) + '...');
     res.status(200).json({ extractedText: fullTextAnnotation?.text || '' });
 
   } catch (error) {
