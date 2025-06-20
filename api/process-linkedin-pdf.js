@@ -1,14 +1,8 @@
 // /Users/jarred/employee-directory/api/process-linkedin-pdf.js
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import { createRequire } from 'module';
 import OpenAI from 'openai';
 
-// Use createRequire to load the CommonJS version of pdfjs-dist,
-// specifically targeting the legacy CommonJS build for Node.js.
-const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); // Explicitly use the CJS legacy build
-pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
@@ -32,59 +26,38 @@ if (!AIRTABLE_BASE_ID || !AIRTABLE_PAT) {
     // Consider how to handle this: throw an error, or let it proceed and fail at saveExperienceToAirtable
 }
 
-async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
+async function extractTextViaInternalOcrApi(pdfBuffer, currentRequest) {
     try {
-        // Convert Buffer to Uint8Array for pdf.js
-        const uint8Array = new Uint8Array(pdfBuffer); 
-        const loadingTask = pdfjsLib.getDocument({
-            data: uint8Array // isWorkerDisabled is not needed when GlobalWorkerOptions.workerSrc is null
+        const base64PdfData = pdfBuffer.toString('base64');
+
+        // Determine the protocol and host for the internal API call
+        // In Vercel, 'x-forwarded-proto' and 'host' headers are reliable
+        const protocol = currentRequest.headers['x-forwarded-proto'] || 'http';
+        const host = currentRequest.headers.host;
+        const ocrApiUrl = `${protocol}://${host}/api/ocr-pdf`;
+
+        console.log(`Internally calling OCR API: ${ocrApiUrl}`);
+
+        const ocrResponse = await fetch(ocrApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ base64PdfData }), // /api/ocr-pdf expects this
         });
-        const pdfDocument = await loadingTask.promise;
-        let fullText = '';
 
-        for (let i = 1; i <= pdfDocument.numPages; i++) {
-            const page = await pdfDocument.getPage(i);
-            const textContent = await page.getTextContent();
-            // textContent.items is an array of text items.
-            // Concatenate them, adding a space for separation.
-            // Handle potential diacritics or special characters by joining item.str
-            fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+        if (!ocrResponse.ok) {
+            const errorText = await ocrResponse.text();
+            console.error(`Internal OCR API call failed with status ${ocrResponse.status}:`, errorText.substring(0, 500));
+            throw new Error(`Internal OCR API call failed: ${ocrResponse.status} - ${errorText.substring(0,100)}`);
         }
 
-        console.log(`Extracted ${fullText.length} characters from PDF using pdfjs-dist.`);
-
-        const experienceStart = fullText.toLowerCase().indexOf("experience");
-        if (experienceStart === -1) {
-            console.warn("Could not find 'Experience' section heading in PDF text.");
-            // Fallback: return all text, or a significant portion if too long
-            return fullText.substring(0, 15000); // Limit to avoid overly large OpenAI prompts
-        }
-
-        let experienceText = fullText.substring(experienceStart);
-
-        // Keywords to stop extraction (these often appear after the experience section)
-        const stopKeywords = ["education", "licenses & certifications", "certifications", "volunteering", "skills", "projects", "courses", "honors & awards", "languages", "publications"];
-        const lowerExperienceText = experienceText.toLowerCase();
-        let earliestStopIndex = -1;
-
-        for (const kw of stopKeywords) {
-            // Search for the keyword *after* "experience" itself
-            const idx = lowerExperienceText.indexOf(kw, "experience".length);
-            if (idx > 0) {
-                if (earliestStopIndex === -1 || idx < earliestStopIndex) {
-                    earliestStopIndex = idx;
-                }
-            }
-        }
-
-        if (earliestStopIndex > 0) {
-            experienceText = experienceText.substring(0, earliestStopIndex);
-        }
-
-        return experienceText.trim();
+        const ocrData = await ocrResponse.json();
+        console.log(`Text extracted via internal OCR API call (length ${ocrData.extractedText?.length || 0}).`);
+        return ocrData.extractedText || ''; // Return the full extracted text
     } catch (error) {
-    console.error("Error parsing PDF content with pdfjs-dist:", error.message, error.stack);
-    throw new Error(`Failed to parse PDF content. Original error: ${error.name} - ${error.message}`);
+    console.error("Error calling internal OCR API or processing its response:", error.message, error.stack);
+    throw new Error(`Failed to extract text via internal OCR API. Original error: ${error.name} - ${error.message}`);
     }
 }
 
@@ -210,7 +183,8 @@ export default async function handler(req, res) {
 
         try {
             const pdfBuffer = fs.readFileSync(pdfFile.filepath);
-            const experienceText = await extractExperienceTextFromPdfBuffer(pdfBuffer);
+            // Pass the original request object (req) to help construct the internal API call URL
+            const experienceText = await extractTextViaInternalOcrApi(pdfBuffer, req);
 
             if (!experienceText || experienceText.trim().length < 50) { // Arbitrary short length check
                  console.warn("Extracted experience text is very short or empty:", experienceText);
