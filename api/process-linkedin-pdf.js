@@ -124,37 +124,61 @@ async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
         return { success: false, message: "Employee Record ID not provided." };
     }
 
-    const recordsToCreate = jobExperiences.map(job => ({
-        fields: {
-            'Company': job.Company,
-            'Role': job['Role Held at the Company'], // Assuming 'Role' is the field name in Airtable
-            'Start Date': job['Start Date'],     // Airtable can often parse common date strings
-            'End Date': job['End Date'],
-            'Description': job['Brief Description'],
-            'Employee Code': [employeeRecordId] // Link to the employee record in Airtable.
-            // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
+    try {
+        const recordsToCreate = jobExperiences.map(job => ({
+            fields: {
+                'Company': job.Company,
+                'Role': job['Role Held at the Company'], // Assuming 'Role' is the field name in Airtable
+                'Start Date': job['Start Date'],     // Airtable can often parse common date strings
+                'End Date': job['End Date'],
+                'Description': job['Brief Description'],
+                'Employee Code': [employeeRecordId] // Link to the employee record in Airtable.
+                // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
+            }
+        }));
+
+        if (recordsToCreate.length === 0) {
+            return { success: true, message: "No job experiences to save." };
         }
-    }));
 
-    if (recordsToCreate.length === 0) {
-        return { success: true, message: "No job experiences to save." };
+        const airtableApiUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(WORK_EXPERIENCE_TABLE_NAME)}`;
+        const CHUNK_SIZE = 10; // Airtable API limit
+        let allResponses = [];
+        let allSuccess = true;
+
+        for (let i = 0; i < recordsToCreate.length; i += CHUNK_SIZE) {
+            const chunk = recordsToCreate.slice(i, i + CHUNK_SIZE);
+            console.log(`Sending chunk of ${chunk.length} records to Airtable...`);
+
+            const response = await fetch(airtableApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${AIRTABLE_PAT}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ records: chunk })
+            });
+
+            const responseData = await response.json();
+            allResponses.push({ status: response.status, data: responseData });
+
+            if (!response.ok) {
+                console.error(`Airtable API error on chunk starting at index ${i}:`, response.status, responseData);
+                allSuccess = false;
+                break; // Stop on the first error
+            }
+        }
+
+        if (allSuccess) {
+            return { success: true, message: `Successfully created ${recordsToCreate.length} records in Airtable.`, data: allResponses };
+        } else {
+            const firstError = allResponses.find(r => r.status >= 400);
+            return { success: false, message: "An error occurred while saving records to Airtable.", ...firstError };
+        }
+    } catch (error) {
+        console.error("Unexpected error in saveExperienceToAirtable:", error);
+        return { success: false, message: "An unexpected error occurred during the Airtable save process.", details: error.message };
     }
-
-    const airtableApiUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(WORK_EXPERIENCE_TABLE_NAME)}`;
-    const response = await fetch(airtableApiUrl, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${AIRTABLE_PAT}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ records: recordsToCreate })
-    });
-
-    const responseData = await response.json();
-    if (!response.ok) {
-        console.error("Airtable API error:", response.status, responseData);
-    }
-    return { success: response.ok, status: response.status, data: responseData };
 }
 
 export const config = {
