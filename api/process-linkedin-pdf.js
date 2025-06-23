@@ -52,30 +52,36 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
         console.log("Full text extracted by pdfjs-dist (first 2000 chars):\n", fullText.substring(0, 2000)); // Log full text
         console.log(`Extracted ${fullText.length} characters from PDF using pdfjs-dist.`);
 
-        // Find the start of the "Experience" section
-        const experienceStart = fullText.toLowerCase().indexOf("experience"); // Find first "experience"
+        // 1. Find the start of the "Experience" section
+        const experienceStart = fullText.toLowerCase().indexOf("experience");
         if (experienceStart === -1) {
             console.warn("Could not find 'Experience' section heading in PDF text.");
-            // Fallback: return all text, or a significant portion if too long
-            return fullText.substring(0, 15000); // Limit to avoid overly large OpenAI prompts
+            return fullText.substring(0, 10000); // Reduced fallback limit
         }
 
-        // Start the experience text from the detected "Experience" heading
-        let experienceText = fullText.substring(experienceStart); 
+        let experienceText = fullText.substring(experienceStart);
 
-        // Keywords to stop extraction (these often appear after the experience section)
-        // Prioritize common section headings that appear AFTER experience
-        const stopKeywords = [
-            "education", "licenses & certifications", "certifications", "volunteering",
-            "skills", "projects", "courses", "honors & awards", "languages", "publications",
-            "interests", "awards", "recommendations", "patents" // Added more common LinkedIn section headers
-        ];
+        // 2. Prioritize section headings that *immediately* follow "Experience"
+        const primaryStopKeywords = ["about", "skills", "education"]; // Common LinkedIn section headings
         const lowerExperienceText = experienceText.toLowerCase();
         let earliestStopIndex = -1;
 
-        for (const kw of stopKeywords) {
-            const idx = lowerExperienceText.indexOf(kw); // Search from the beginning of the extracted experienceText
-            if (idx !== -1) { // If keyword is found
+        for (const kw of primaryStopKeywords) {
+            const idx = lowerExperienceText.indexOf(kw);
+            if (idx > "experience".length && (earliestStopIndex === -1 || idx < earliestStopIndex)) {
+                earliestStopIndex = idx;
+            }
+        }
+
+        // 3. If no primary heading found, use a broader set of keywords with a character limit
+        if (earliestStopIndex === -1) {
+            const secondaryStopKeywords = [
+                "licenses & certifications", "certifications", "volunteering", "projects",
+                "courses", "honors & awards", "languages", "publications", "interests",
+                "awards", "recommendations", "patents"
+            ];
+            for (const kw of secondaryStopKeywords) {
+                const idx = lowerExperienceText.indexOf(kw);
                 if (earliestStopIndex === -1 || idx < earliestStopIndex) {
                     earliestStopIndex = idx;
                 }
@@ -86,7 +92,7 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
             experienceText = experienceText.substring(0, earliestStopIndex);
         }
 
-        console.log("Experience text sent to OpenAI (first 1000 chars):\n", experienceText.substring(0, 1000)); // Log final experience text
+        console.log("Experience text sent to OpenAI (length: " + experienceText.length + ", first 1000 chars):\n", experienceText.substring(0, 1000));
         return experienceText.trim();
     } catch (error) {
         console.error("Error parsing PDF content with pdfjs-dist:", error.message, error.stack);
