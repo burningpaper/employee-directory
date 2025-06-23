@@ -130,7 +130,8 @@ async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
                 'Company': job.Company,
                 'Role': job['Role Held at the Company'], // Assuming 'Role' is the field name in Airtable
                 'Start Date': job['Start Date'],     // Airtable can often parse common date strings
-                'End Date': job['End Date'],
+                // Airtable cannot parse "Present" as a date. Send null for ongoing roles.
+                'End Date': job['End Date'] === 'Present' ? null : job['End Date'],
                 'Description': job['Brief Description'],
                 'Employee Code': [employeeRecordId] // Link to the employee record in Airtable.
                 // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
