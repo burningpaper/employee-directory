@@ -186,7 +186,11 @@ async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
         body: JSON.stringify({ records: recordsToCreate })
     });
 
-    return { success: response.ok, status: response.status, data: await response.json() };
+    const responseData = await response.json();
+    if (!response.ok) {
+        console.error("Airtable API error:", response.status, responseData);
+    }
+    return { success: response.ok, status: response.status, data: responseData };
 }
 
 export const config = {
