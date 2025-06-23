@@ -49,6 +49,7 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
             fullText += textContent.items.map(item => item.str).join(' ') + '\n';
         }
 
+        console.log("Full text extracted by pdfjs-dist (first 2000 chars):\n", fullText.substring(0, 2000)); // Log full text
         console.log(`Extracted ${fullText.length} characters from PDF using pdfjs-dist.`);
 
         const experienceStart = fullText.toLowerCase().indexOf("experience");
