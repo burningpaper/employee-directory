@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/process-linkedin-pdf.js": {
-      "includeFiles": "node_modules/pdfjs-dist/legacy/build/pdf.js,node_modules/pdfjs-dist/cmaps/**"
+      "includeFiles": "node_modules/pdfjs-dist/**"
     }
   }
 }
