@@ -167,7 +167,7 @@ async function saveExperienceToAirtable(employeeRecordId, jobExperiences) {
             'Start Date': job['Start Date'],     // Airtable can often parse common date strings
             'End Date': job['End Date'],
             'Description': job['Brief Description'],
-            'Employee Database': [employeeRecordId] // Link to the employee record in Airtable
+            'YOUR_ACTUAL_LINKED_EMPLOYEE_FIELD_NAME': [employeeRecordId] // Link to the employee record in Airtable. REPLACE THIS!
             // 'Years Worked There': job['Years Worked There'], // Optional: if you have a field for this
         }
     }));
