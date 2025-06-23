@@ -1,105 +1,89 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-gray-100">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Profile</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Basic styles from previous version, can be augmented or replaced by Tailwind */
-        body { font-family: sans-serif; margin: 20px; }
-        h1, h2, h3 { color: #333; }
-        label { display: block; margin-top: 10px; }
-        input[type="file"] { margin-bottom: 10px; }
-        button {
-            padding: 10px 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        pre {
-            background-color: #f4f4f4;
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 4px;
-            white-space: pre-wrap; /* Handles long lines */
-            word-wrap: break-word; /* Ensures words break to prevent overflow */
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        hr { margin: 20px 0; }
-
-        /* Tailwind utility classes will override these where applied */
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Profile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/src/style.css">
 </head>
 <body class="h-full">
-    <header class="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div class="flex items-center max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
-          <a href="search.html" class="text-xl font-semibold text-indigo-600 hover:text-indigo-700">VML Intranet</a>
-        </div>
-    </header>
-
-    <main class="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h1 id="emp-name" class="text-3xl font-bold text-gray-900">Loading...</h1>
-                <div>
-                    <button id="editBtn" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Edit</button>
-                    <button id="saveBtn" class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" style="display: none;">Save</button>
-                    <button id="cancelBtn" class="ml-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" style="display: none;">Cancel</button>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-1">
-                    <img id="emp-photo" src="https://placehold.co/256" alt="Profile Photo" class="w-full h-auto rounded-lg shadow-md object-cover aspect-square">
-                </div>
-                <div class="md:col-span-2 space-y-4">
-                    <div>
-                        <h2 class="text-sm font-medium text-gray-500">Job Title</h2>
-                        <p id="emp-title" class="mt-1 text-lg text-gray-900">-</p>
-                    </div>
-                    <div>
-                        <h2 class="text-sm font-medium text-gray-500">Details</h2>
-                        <p id="emp-meta" class="mt-1 text-gray-700">-</p>
-                        <p id="emp-phone" class="mt-1 text-gray-700">-</p>
-                        <p class="mt-1 text-gray-700">Started: <span id="emp-start">-</span></p>
-                    </div>
-                     <div>
-                        <h2 class="text-sm font-medium text-gray-500">Skills</h2>
-                        <div id="emp-skills" class="mt-1 flex flex-wrap gap-2">
-                            <!-- Skills will be populated here by profile.ts -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="mt-6">
-                <h2 class="text-sm font-medium text-gray-500">Bio</h2>
-                <p id="emp-bio" class="mt-1 text-gray-700 whitespace-pre-wrap">-</p>
-            </div>
-        </div>
-
-    <hr>
-    <h2>Process LinkedIn PDF</h2>
-    <div>
-        <label for="linkedinPdfUploader">Upload LinkedIn PDF:</label>
-        <input type="file" id="linkedinPdfUploader" accept="application/pdf">
+  <!-- Header -->
+  <header class="bg-white border-b shadow-sm sticky top-0 z-10">
+    <div class="flex items-center justify-between max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
+      <a href="search.html" class="text-xl font-semibold text-indigo-600 hover:text-indigo-700">VML Intranet</a>
+      <!-- Edit/Save/Cancel Buttons -->
+      <div>
+        <button id="editBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-300">Edit</button>
+        <button id="saveBtn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700" style="display: none;">Save</button>
+        <button id="cancelBtn" class="ml-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-md shadow-sm border border-gray-300 hover:bg-gray-50" style="display: none;">Cancel</button>
+      </div>
     </div>
-    <button id="processPdfButton" class="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400">Extract Experience</button>
+  </header>
 
+  <main class="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+    <!-- Main Profile Section -->
+    <div id="employee-profile" class="bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-8">
+      <!-- Header Area: Name, Job Title, Photo -->
+      <div class="md:flex md:justify-between md:items-start mb-6">
+        <div>
+          <h1 id="emp-name" class="text-3xl font-bold text-gray-900">Loading...</h1>
+          <p id="emp-title" class="mt-2 text-lg text-gray-500"></p>
+          <p id="emp-meta" class="mt-1 text-sm text-gray-500"></p>
+        </div>
+        <div class="mt-4 md:mt-0">
+          <img id="emp-photo" class="h-32 w-32 rounded-full object-cover shadow-md" src="https://placehold.co/128" alt="Profile Photo">
+        </div>
+      </div>
 
-    <h3>Extracted Experience:</h3>
-    <pre id="experienceOutput">No PDF processed yet.</pre>
+      <!-- Contact and Start Date -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 border-t border-b border-gray-200 py-4">
+        <p class="text-gray-700"><span class="font-medium">Phone:</span> <span id="emp-phone"></span></p>
+        <p class="text-gray-700"><span class="font-medium">Start Date:</span> <span id="emp-start"></span></p>
+      </div>
 
-    </main>
-    <footer class="py-6 text-center text-xs text-gray-400">© 2025 VML South Africa • Internal Use Only</footer>
-    <script type="module" src="/src/profile.ts"></script> <!-- Ensure path is correct for your setup -->
+      <!-- Bio Section -->
+      <div class="mb-8">
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">Bio</h2>
+        <p id="emp-bio" class="text-gray-700 prose"></p>
+      </div>
+
+      <!-- Two-Column Layout for Experience, Skills, Traits -->
+      <div class="md:grid md:grid-cols-3 md:gap-8">
+        <!-- Left Column: Work Experience & Client Experience -->
+        <div class="md:col-span-2">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Work Experience</h2>
+          <div id="work-experience-list" class="space-y-4 mb-8"></div>
+
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Client Experience</h2>
+          <div id="client-experience-list" class="space-y-2"></div>
+        </div>
+        <!-- Right Column: Skills & Traits -->
+        <div class="md:col-span-1 mt-8 md:mt-0">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Skills</h2>
+          <div id="emp-skills" class="flex flex-wrap gap-2 mb-8"></div>
+
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Traits</h2>
+          <div id="emp-traits" class="space-y-1"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF Processing Section -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
+      <h2 class="text-xl font-semibold text-gray-800 mb-4">Process LinkedIn PDF</h2>
+      <div class="mb-4">
+        <label for="linkedinPdfUploader" class="block text-sm font-medium text-gray-700">Upload LinkedIn PDF:</label>
+        <input type="file" id="linkedinPdfUploader" name="linkedinPdf" accept="application/pdf" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+      </div>
+      <button id="processPdfButton" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Process PDF</button>
+      <pre id="experienceOutput" class="mt-4 p-4 bg-gray-50 rounded-md text-sm text-gray-800 overflow-auto h-48">No PDF processed yet.</pre>
+    </div>
+  </main>
+
+  <footer class="py-6 text-center text-xs text-gray-400 mt-8">© 2025 VML South Africa • Internal Use Only</footer>
+  
+  <!-- The script must be at the end of the body -->
+  <script type="module" src="/src/profile.ts"></script>
 </body>
 </html>
