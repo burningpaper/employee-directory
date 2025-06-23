@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 // Import the ES Module version of pdfjs-dist and its GlobalWorkerOptions
 // This allows direct access to GlobalWorkerOptions without needing the full pdfjsLib object.
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
-GlobalWorkerOptions.workerSrc = null;
+GlobalWorkerOptions.disableWorker = true;
 
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
