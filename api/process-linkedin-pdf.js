@@ -52,48 +52,12 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
         console.log("Full text extracted by pdfjs-dist (first 2000 chars):\n", fullText.substring(0, 2000)); // Log full text
         console.log(`Extracted ${fullText.length} characters from PDF using pdfjs-dist.`);
 
-        // 1. Find the start of the "Experience" section
-        const experienceStart = fullText.toLowerCase().indexOf("experience");
-        if (experienceStart === -1) {
-            console.warn("Could not find 'Experience' section heading in PDF text.");
-            return fullText.substring(0, 10000); // Reduced fallback limit
-        }
-
-        let experienceText = fullText.substring(experienceStart);
-
-        // 2. Prioritize section headings that *immediately* follow "Experience"
-        const primaryStopKeywords = ["about", "skills", "education"]; // Common LinkedIn section headings
-        const lowerExperienceText = experienceText.toLowerCase();
-        let earliestStopIndex = -1;
-
-        for (const kw of primaryStopKeywords) {
-            const idx = lowerExperienceText.indexOf(kw);
-            if (idx > "experience".length && (earliestStopIndex === -1 || idx < earliestStopIndex)) {
-                earliestStopIndex = idx;
-            }
-        }
-
-        // 3. If no primary heading found, use a broader set of keywords with a character limit
-        if (earliestStopIndex === -1) {
-            const secondaryStopKeywords = [
-                "licenses & certifications", "certifications", "volunteering", "projects",
-                "courses", "honors & awards", "languages", "publications", "interests",
-                "awards", "recommendations", "patents"
-            ];
-            for (const kw of secondaryStopKeywords) {
-                const idx = lowerExperienceText.indexOf(kw);
-                if (earliestStopIndex === -1 || idx < earliestStopIndex) {
-                    earliestStopIndex = idx;
-                }
-            }
-        }
-
-        if (earliestStopIndex !== -1) { // If a stop keyword was found
-            experienceText = experienceText.substring(0, earliestStopIndex);
-        }
-
-        console.log("Experience text sent to OpenAI (length: " + experienceText.length + ", first 1000 chars):\n", experienceText.substring(0, 1000));
-        return experienceText.trim();
+        // Given the PDF structure, send the entire extracted text to OpenAI.
+        // Rely on OpenAI's intelligence and the prompt's instructions to filter.
+        // The "Prioritize the most recent roles" instruction in the prompt is key here.
+        const textToSendToOpenAI = fullText.trim();
+        console.log("Full text sent to OpenAI (length: " + textToSendToOpenAI.length + ", first 1000 chars):\n", textToSendToOpenAI.substring(0, 1000));
+        return textToSendToOpenAI;
     } catch (error) {
         console.error("Error parsing PDF content with pdfjs-dist:", error.message, error.stack);
         throw new Error(`Failed to parse PDF content. Original error: ${error.name} - ${error.message}`);
