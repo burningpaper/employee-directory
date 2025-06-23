@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 // Use createRequire to load the CommonJS version of pdfjs-dist,
 // specifically targeting the legacy CommonJS build for Node.js.
 const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); // Use explicit path, now guaranteed by vercel.json
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.cjs'); // Corrected path for pdfjs-dist v4+ CommonJS
 pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
 
