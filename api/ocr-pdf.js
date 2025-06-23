@@ -77,12 +77,41 @@ export default async function handler(req, res) {
 
     console.log('Sending request to Google Cloud Vision API...');
     const [result] = await client.batchAnnotateFiles(request);
-    
+    // Log the raw result for debugging
     console.log('Raw Google Cloud Vision API result (first response):', JSON.stringify(result.responses[0], null, 2));
     
     const fullTextAnnotation = result.responses[0]?.fullTextAnnotation;
-    console.log('Extracted fullTextAnnotation.text (length ' + (fullTextAnnotation?.text?.length || 0) + '):', (fullTextAnnotation?.text || '').substring(0, 500) + '...');
-    res.status(200).json({ extractedText: fullTextAnnotation?.text || '' });
+    let extractedText = fullTextAnnotation?.text || '';
+
+    // If fullTextAnnotation.text is empty, try to reconstruct from pages/blocks/paragraphs/words/symbols
+    if (!extractedText && fullTextAnnotation && fullTextAnnotation.pages) {
+      console.log("fullTextAnnotation.text is empty, attempting to reconstruct text from pages...");
+      let reconstructedText = "";
+      fullTextAnnotation.pages.forEach(page => {
+        page.blocks.forEach(block => {
+          block.paragraphs.forEach(paragraph => {
+            paragraph.words.forEach(word => {
+              word.symbols.forEach(symbol => {
+                reconstructedText += symbol.text;
+                if (symbol.property?.detectedBreak?.type) {
+                  const breakType = symbol.property.detectedBreak.type;
+                  if (breakType === 'SPACE' || breakType === 'SURE_SPACE') {
+                    reconstructedText += ' ';
+                  } else if (breakType === 'EOL_SURE_SPACE' || breakType === 'LINE_BREAK') {
+                    reconstructedText += '\n';
+                  }
+                }
+              });
+              reconstructedText += ' '; // Add a space after each word by default if no break detected
+            });
+            reconstructedText += '\n'; // Add a newline after each paragraph
+          });
+        });
+      });
+      extractedText = reconstructedText.replace(/ +\n/g, '\n').replace(/ +/g, ' ').trim(); // Basic cleanup
+    }
+    console.log('Final extractedText (length ' + (extractedText?.length || 0) + '):', (extractedText || '').substring(0, 500) + '...');
+    res.status(200).json({ extractedText: extractedText });
 
   } catch (error) {
     console.error('Error calling Google Cloud Vision API:', error);
