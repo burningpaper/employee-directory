@@ -1,14 +1,12 @@
 // /Users/jarred/employee-directory/api/process-linkedin-pdf.js
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import { createRequire } from 'module';
 import OpenAI from 'openai';
 
-// Use createRequire to load the CommonJS version of pdfjs-dist,
-// specifically targeting the legacy CommonJS build for Node.js.
-const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.cjs'); // Corrected path for pdfjs-dist v4+ CommonJS
-pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+// Import the ES Module version of pdfjs-dist and its GlobalWorkerOptions
+// This allows direct access to GlobalWorkerOptions without needing the full pdfjsLib object.
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
+GlobalWorkerOptions.workerSrc = null;
 
 
 // Ensure your VITE_OPENAI_KEY is set as an environment variable in Vercel
@@ -36,7 +34,7 @@ async function extractExperienceTextFromPdfBuffer(pdfBuffer) {
     try {
         // Convert Buffer to Uint8Array for pdf.js
         const uint8Array = new Uint8Array(pdfBuffer);
-        const loadingTask = pdfjsLib.getDocument({
+        const loadingTask = getDocument({ // Use getDocument directly
             data: uint8Array // isWorkerDisabled is not needed when GlobalWorkerOptions.workerSrc is null
         });
         const pdfDocument = await loadingTask.promise;
