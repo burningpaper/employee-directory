@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 // Use createRequire to load the CommonJS version of pdfjs-dist,
 // specifically targeting the legacy CommonJS build for Node.js.
 const require = createRequire(import.meta.url);
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); // Explicitly use the CJS legacy build
+const pdfjsLib = require('pdfjs-dist'); // Let Node's resolver use the 'main' or 'exports' field.
 pdfjsLib.GlobalWorkerOptions.workerSrc = null;
 
 
