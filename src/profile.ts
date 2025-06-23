@@ -115,12 +115,64 @@ window.addEventListener('DOMContentLoaded', async () => {
     const empStartEl = $('emp-start');
     if (empStartEl) empStartEl.textContent = fmt(f['Employee Start Date']);
 
-    // skills
-    const skills = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SKILL_TABLE)}?pageSize=3`);
+    // Populate Work Experience
+    const workExpEl = $('work-experience-list');
+    const workExpIds = f['Work Experience']; // This will be an array of record IDs
+
+    if (workExpEl && workExpIds && Array.isArray(workExpIds) && workExpIds.length > 0) {
+        workExpEl.innerHTML = `<p class="text-gray-500">Loading work experience...</p>`;
+
+        try {
+            // Create a fetch promise for each linked record ID
+            const experiencePromises = workExpIds.map(id => getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent('Work Experience')}/${id}`));
+            const experienceRecords = await Promise.all(experiencePromises);
+
+            // Render the full details for each job
+            workExpEl.innerHTML = experienceRecords.map(record => {
+                const job = record.fields;
+                const startDate = job['Start Date'] ? fmt(job['Start Date']) : 'N/A';
+                const endDate = job['End Date'] ? fmt(job['End Date']) : 'Present';
+                return `
+                    <div class="p-4 border border-gray-200 rounded-md shadow-sm">
+                        <h3 class="font-bold text-gray-800">${job.Role || 'N/A'}</h3>
+                        <p class="text-md text-gray-600">${job.Company || 'N/A'}</p>
+                        <p class="text-sm text-gray-500">${startDate} – ${endDate}</p>
+                        <p class="mt-2 text-sm text-gray-700 prose">${job.Description || ''}</p>
+                    </div>`;
+            }).join('');
+        } catch (err) {
+            console.error("Failed to fetch work experience details:", err);
+            workExpEl.innerHTML = `<p class="text-red-500">Could not load work experience details.</p>`;
+        }
+    } else if (workExpEl) {
+        workExpEl.innerHTML = `<p class="text-gray-500">No work experience listed.</p>`;
+    }
+
+    // Populate Client Experience
+    const clientExpEl = $('client-experience-list');
+    if (clientExpEl && f['Client Experience']) {
+        const experiences = Array.isArray(f['Client Experience']) ? f['Client Experience'] : String(f['Client Experience']).split('\n');
+        clientExpEl.innerHTML = experiences
+            .filter((exp: string) => exp.trim() !== '')
+            .map((exp: string) => `<p class="mb-2 text-gray-700">${exp}</p>`).join('');
+    }
+
+    // Populate Skills from the employee record, not a generic table fetch
     const empSkillsEl = $('emp-skills');
-    // simple demo chip - ensure empSkillsEl exists
-    if (empSkillsEl) {
-        skills.records.slice(0,3).forEach((r: any)=> empSkillsEl.insertAdjacentHTML('beforeend', `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">${r.fields['Skill Name']}</span>`));
+    if (empSkillsEl && f.Skills) {
+        // Assuming f.Skills is an array of strings from a multi-select or lookup field
+        if (Array.isArray(f.Skills)) {
+            empSkillsEl.innerHTML = f.Skills.map((skill: string) => 
+                `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill}</span>`
+            ).join('');
+        }
+    }
+
+    // Populate Traits
+    const empTraitsEl = $('emp-traits');
+    if (empTraitsEl && f.Traits) {
+        const traits = Array.isArray(f.Traits) ? f.Traits : String(f.Traits).split('\n');
+        empTraitsEl.innerHTML = traits.filter((trait: string) => trait.trim() !== '').map((trait: string) => `<p class="text-gray-700">${trait}</p>`).join('');
     }
 
     const saveBtn = $('saveBtn');
