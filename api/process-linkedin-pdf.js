@@ -124,7 +124,8 @@ async function callOpenAIForExperienceJson(experienceText) {
                                "For each role, include:\\n- Company\\n- Role Held at the Company\\n- Start Date (month and year if available, e.g., \"Jan 2020\")\\n- End Date (month and year if available, or \"Present\", e.g., \"Dec 2022\" or \"Present\")\\n- Years Worked There (e.g., \"2 yrs 3 mos\" or \"Less than a year\")\\n- Brief Description (max 70 words, summarize key responsibilities and achievements)\\n\\n" +
                                "List each distinct role **separately**, even if from the same company (e.g., promotion from 'Software Engineer' to 'Senior Software Engineer' at the same company should be two entries).\\n\\n" +
                                "Ignore irrelevant content. Return only a JSON object with a single key \"job_experiences\".\\n\\n" +
-                               `Here is the text:\n\n${experienceText}`
+                               "Prioritize the most recent roles. Here is the text:\n\n" + // Added prioritization hint
+                               `${experienceText}`
                 }
             ],
             response_format: { type: "json_object" }, // For newer models that support JSON mode
