@@ -9,19 +9,14 @@ if (!BASE_ID || !TOKEN) throw new Error('Missing Airtable env vars');
 
 // 2️⃣ Tables
 const EMP_TABLE   = 'Employee Database';
-const SKILL_TABLE = 'Skills'; // This might not be strictly needed if skills are directly on employee record
-const WORK_EXPERIENCE_TABLE = 'Work Experience'; // Table name for work experience records
+const SKILL_TABLE = 'Skills';
 
 // 3️⃣ Helpers
 const authHeaders = { Authorization: `Bearer ${TOKEN}` };
 const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
 const getJSON = async (url: string) => {
   const r = await fetch(url, { headers: authHeaders });
-  if (!r.ok) {
-    const errorText = await r.text();
-    console.error(`Error fetching from ${url}: ${r.status} - ${errorText}`);
-    throw new Error(`Failed to fetch data: ${r.status} - ${errorText}`);
-  }
+  if (!r.ok) throw new Error(await r.text());
   return r.json();
 };
 
@@ -29,7 +24,7 @@ function fmt(d?: string) {
   return d ? new Date(d).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' }) : '';
 }
 
-// 4️⃣ toggle UI for main profile fields (Job Title, Bio, Phone)
+// 4️⃣ toggle UI
 function toggleEdit(on: boolean) {
   const editBtn   = $('editBtn');
   const saveBtn   = $('saveBtn');
@@ -43,11 +38,10 @@ function toggleEdit(on: boolean) {
   const bio   = $('emp-bio');
   const phone = $('emp-phone');
   if (!title || !bio || !phone) return;
-
   if (on) {
-    title.innerHTML = `<input id="editTitle" class="w-full border rounded px-2 py-1" value="${title.textContent || ''}">`;
-    bio.innerHTML   = `<textarea id="editBio" class="w-full border rounded px-2 py-1" rows="4">${bio.textContent || ''}</textarea>`;
-    phone.innerHTML = `<input id="editPhone" class="w-full border rounded px-2 py-1" value="${phone.textContent || ''}">`;
+    title.innerHTML = `<input id="editTitle" class="w-full border rounded px-2 py-1" value="${title.textContent}">`;
+    bio.innerHTML   = `<textarea id="editBio" class="w-full border rounded px-2 py-1" rows="4">${bio.textContent}</textarea>`;
+    phone.innerHTML = `<input id="editPhone" class="w-full border rounded px-2 py-1" value="${phone.textContent}">`;
   } else {
     const t = $('editTitle') as HTMLInputElement | null;
     const b = $('editBio')   as HTMLTextAreaElement | null;
@@ -63,24 +57,16 @@ async function saveEdits(recordId: string) {
   const b = $('editBio')   as HTMLTextAreaElement | null;
   const p = $('editPhone') as HTMLInputElement | null;
   if (!t || !b || !p) return;
-
-  const fieldsToUpdate = {
-    'Job Title': t.value,
-    'Bio': b.value,
-    'Phone': p.value
-  };
-
-  try {
-    await updateEmployeeRecord(recordId, fieldsToUpdate);
-    toggleEdit(false); // Hide edit fields and show static text
-    alert('Profile updated successfully!');
-  } catch (error) {
-    console.error("Error saving main profile edits:", error);
-    alert('Failed to save profile edits. Please try again.');
-  }
+  const body = JSON.stringify({
+    records: [{ id: recordId, fields: { 'Job Title': t.value, Bio: b.value, Phone: p.value } }]
+  });
+  const r = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}`, {
+    method: 'PATCH', headers: jsonHeaders, body
+  });
+  if (r.ok) toggleEdit(false); else console.error(await r.text());
 }
 
-// Helper function to update employee record in Airtable (used by modals and main edit)
+// Helper function to update employee record in Airtable
 async function updateEmployeeRecord(recordId: string, fields: { [key: string]: any }) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}`;
     const body = JSON.stringify({ records: [{ id: recordId, fields }] });
@@ -100,17 +86,14 @@ async function updateEmployeeRecord(recordId: string, fields: { [key: string]: a
 // 5️⃣ On DOM ready
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('DOMContentLoaded event fired. Setting up profile page...');
-
   // --- PDF Processing Elements ---
   const pdfUploader = document.getElementById('linkedinPdfUploader') as HTMLInputElement | null;
   const processPdfButton = document.getElementById('processPdfButton') as HTMLButtonElement | null;
   const experienceOutput = document.getElementById('experienceOutput') as HTMLPreElement | null;
 
-  // Bind static buttons (Edit, Save, Cancel for main profile fields)
+  // Bind static buttons
   const editBtn   = $('editBtn');
   const cancelBtn = $('cancelBtn');
-  const saveBtn = $('saveBtn'); // Re-get saveBtn for main profile fields
-
   if (editBtn) {
     console.log('Edit button found. Attaching listener.');
     editBtn.addEventListener('click', () => toggleEdit(true));
@@ -128,34 +111,30 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (empNameEl) empNameEl.textContent = "Error: Employee ID not found in URL.";
       return;
   }
-
   try {
     const emp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
-    const f = emp.fields; // Employee fields
+    const f = emp.fields;
 
     const empNameEl = $('emp-name');
-    if (empNameEl) empNameEl.textContent  = f['Employee Name'] || 'N/A';
+    if (empNameEl) empNameEl.textContent  = f['Employee Name'];
 
     const empTitleEl = $('emp-title');
-    if (empTitleEl) empTitleEl.textContent = f['Job Title'] || 'N/A';
+    if (empTitleEl) empTitleEl.textContent = f['Job Title'] || '';
 
     const empMetaEl = $('emp-meta');
     if (empMetaEl) empMetaEl.textContent  = `${f.Department || ''}${f.Location ? ' • ' + f.Location : ''}`;
 
     const empBioEl = $('emp-bio');
-    if (empBioEl) empBioEl.textContent   = f.Bio || 'No bio available.';
+    if (empBioEl) empBioEl.textContent   = f.Bio || '';
 
     const empPhotoEl = $('emp-photo');
     if (empPhotoEl) empPhotoEl.setAttribute('src', (f['Profile Photo'] && f['Profile Photo'][0]?.url) || 'https://placehold.co/128');
 
     const empPhoneEl = $('emp-phone');
-    if (empPhoneEl) empPhoneEl.textContent = f.Phone || 'N/A';
+    if (empPhoneEl) empPhoneEl.textContent = f.Phone || '';
 
     const empStartEl = $('emp-start');
     if (empStartEl) empStartEl.textContent = fmt(f['Employee Start Date']);
-
-    // Bind main save button after recordId is available
-    if (saveBtn) saveBtn.addEventListener('click', () => saveEdits(recordId));
 
     // Populate Work Experience
     const workExpEl = $('work-experience-list');
@@ -166,7 +145,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         try {
             // Create a fetch promise for each linked record ID
-            const experiencePromises = workExpIds.map(id => getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(WORK_EXPERIENCE_TABLE)}/${id}`));
+            const experiencePromises = workExpIds.map(id => getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent('Work Experience')}/${id}`));
             const experienceRecords = await Promise.all(experiencePromises);
 
             // Render the full details for each job
@@ -192,18 +171,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Populate Client Experience
     const clientExpEl = $('client-experience-list'); // This is the display div
-    const currentClientExp = Array.isArray(f['Client Experience']) ? f['Client Experience'].join('\n') : String(f['Client Experience'] || ''); // Data for modal
+    const currentClientExp = Array.isArray(f['Client Experience']) ? f['Client Experience'].join('\n') : String(f['Client Experience'] || '');
     if (clientExpEl) {
-        clientExpEl.innerHTML = currentClientExp.split('\n') // Display formatted
+        clientExpEl.innerHTML = currentClientExp.split('\n')
             .filter((exp: string) => exp.trim() !== '')
             .map((exp: string) => `<p class="mb-2 text-gray-700">${exp}</p>`).join('');
     }
 
     // Populate Skills from the employee record
     const empSkillsEl = $('emp-skills'); // This is the display div
-    const currentSkills = Array.isArray(f.Skills) ? f.Skills : (f.Skills ? String(f.Skills).split(',') : []); // Data for modal
+    const currentSkills = Array.isArray(f.Skills) ? f.Skills : (f.Skills ? String(f.Skills).split(',') : []);
     if (empSkillsEl) {
-        empSkillsEl.innerHTML = currentSkills // Display formatted
+        empSkillsEl.innerHTML = currentSkills
             .filter((skill: string) => skill.trim() !== '')
             .map((skill: string) =>
                 `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill}</span>`
@@ -212,9 +191,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Populate Traits
     const empTraitsEl = $('emp-traits'); // This is the display div
-    const currentTraits = Array.isArray(f.Traits) ? f.Traits : (f.Traits ? String(f.Traits).split('\n') : []); // Data for modal
+    const currentTraits = Array.isArray(f.Traits) ? f.Traits : (f.Traits ? String(f.Traits).split('\n') : []);
     if (empTraitsEl) {
-        empTraitsEl.innerHTML = currentTraits // Display formatted
+        empTraitsEl.innerHTML = currentTraits
             .filter((trait: string) => trait.trim() !== '')
             .map((trait: string) => `<p class="text-gray-700">${trait}</p>`).join('');
     }
@@ -251,16 +230,14 @@ window.addEventListener('DOMContentLoaded', async () => {
                 alert('Failed to save client experience. Please try again.');
             }
         });
-    } else if (editClientExpBtn) {
-        console.warn("Client Experience modal elements not fully found. Edit button for client experience might not work. Check profile.html for #clientExpModal, #clientExpInput, #saveClientExpBtn, #cancelClientExpBtn.");
     }
 
     // Skills Modal
     const editSkillsBtn = $('editSkillsBtn');
     const skillsModal = $('skillsModal');
-    const skillsInput = $('skillsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
-    const saveSkillsBtn = $('saveSkillsBtn') as HTMLButtonElement | null;
-    const cancelSkillsBtn = $('cancelSkillsBtn') as HTMLButtonElement | null;
+    const skillsInput = document.getElementById('skillsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
+    const saveSkillsBtn = document.getElementById('saveSkillsBtn') as HTMLButtonElement | null;
+    const cancelSkillsBtn = document.getElementById('cancelSkillsBtn') as HTMLButtonElement | null;
 
     if (editSkillsBtn && skillsModal && skillsInput && saveSkillsBtn && cancelSkillsBtn && empSkillsEl) {
         editSkillsBtn.addEventListener('click', () => {
@@ -288,15 +265,15 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         });
     } else if (editSkillsBtn) {
-        console.warn("Skills modal elements not fully found. Edit button for skills might not work. Check profile.html for #skillsModal, #skillsInput, #saveSkillsBtn, #cancelSkillsBtn.");
+        console.warn("Skills modal elements not fully found. Edit button for skills might not work.");
     }
 
     // Traits Modal
     const editTraitsBtn = $('editTraitsBtn');
     const traitsModal = $('traitsModal');
-    const traitsInput = $('traitsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
-    const saveTraitsBtn = $('saveTraitsBtn') as HTMLButtonElement | null;
-    const cancelTraitsBtn = $('cancelTraitsBtn') as HTMLButtonElement | null;
+    const traitsInput = document.getElementById('traitsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
+    const saveTraitsBtn = document.getElementById('saveTraitsBtn') as HTMLButtonElement | null;
+    const cancelTraitsBtn = document.getElementById('cancelTraitsBtn') as HTMLButtonElement | null;
 
     if (editTraitsBtn && traitsModal && traitsInput && saveTraitsBtn && cancelTraitsBtn && empTraitsEl) {
         editTraitsBtn.addEventListener('click', () => {
@@ -322,8 +299,72 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         });
     } else if (editTraitsBtn) {
-        console.warn("Traits modal elements not fully found. Edit button for traits might not work. Check profile.html for #traitsModal, #traitsInput, #saveTraitsBtn, #cancelTraitsBtn.");
+        console.warn("Traits modal elements not fully found. Edit button for traits might not work.");
     }
+
+  // --- PDF Processing Logic ---
+  if (pdfUploader && processPdfButton && experienceOutput) {
+    console.log('PDF processing elements found. Attaching click listener to processPdfButton.');
+    processPdfButton.addEventListener('click', async () => {
+        console.log('processPdfButton clicked! (Inside listener)');
+        console.log('processPdfButton clicked!');
+        if (!pdfUploader.files || pdfUploader.files.length === 0) {
+            experienceOutput.textContent = 'Please select a PDF file first.';
+            console.log('No PDF file selected.');
+            return;
+        }
+
+        const file = pdfUploader.files[0];
+        const formData = new FormData();
+        formData.append('linkedinPdf', file); // Name must match what backend expects
+        // Add the recordId to the FormData
+        const currentRecordId = new URLSearchParams(location.search).get('id');
+        if (currentRecordId) {
+            formData.append('employeeRecordId', currentRecordId);
+        }
+
+        experienceOutput.textContent = 'Processing PDF... Please wait.';
+        processPdfButton.disabled = true;
+        console.log('Attempting to fetch /api/process-linkedin-pdf');
+
+        try {
+            const response = await fetch('/api/process-linkedin-pdf', {
+                method: 'POST',
+                body: formData,
+            });
+            console.log('Fetch response received:', response.status);
+
+            if (response.ok) {
+                const data = await response.json();
+                experienceOutput.textContent = JSON.stringify(data.job_experiences || data, null, 2);
+            } else {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    experienceOutput.textContent = `Error: ${response.status} - ${errorData.error || 'Failed to process PDF.'}\nDetails: ${errorData.details || 'N/A'}`;
+                    console.error('Server error during PDF processing (JSON):', errorData);
+                } else {
+                    const errorText = await response.text();
+                    experienceOutput.textContent = `Error: ${response.status} - Server returned non-JSON response. Check backend logs. Response: ${errorText.substring(0, 200)}...`;
+                    console.error('Server error during PDF processing (non-JSON):', errorText);
+                }
+            }
+        } catch (error) {
+            experienceOutput.textContent = 'An unexpected error occurred while sending the PDF processing request.';
+            console.error('Fetch error during PDF processing:', error);
+        } finally {
+            processPdfButton.disabled = false;
+        }
+    });
+  } else {
+    console.warn('One or more PDF processing elements (linkedinPdfUploader, processPdfButton, or experienceOutput) were NOT found in the DOM. Button will not work.');
+  }
+});
+  } catch (e) {
+    console.error("Error loading employee data:", e);
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent = "Error loading profile.";
+  }
 
   // --- PDF Processing Logic ---
   if (pdfUploader && processPdfButton && experienceOutput) {
