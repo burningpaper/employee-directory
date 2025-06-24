@@ -325,6 +325,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn("Traits modal elements not fully found. Edit button for traits might not work. Check profile.html for #traitsModal, #traitsInput, #saveTraitsBtn, #cancelTraitsBtn.");
     }
 
+  } catch (error) {
+    console.error("Error loading employee profile data:", error);
+    const empNameEl = $('emp-name');
+    if (empNameEl) empNameEl.textContent = "Error loading profile.";
+  }
+
   // --- PDF Processing Logic ---
   if (pdfUploader && processPdfButton && experienceOutput) {
     console.log('PDF processing elements found. Attaching click listener to processPdfButton.');
