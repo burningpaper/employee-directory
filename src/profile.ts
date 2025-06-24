@@ -10,6 +10,7 @@ if (!BASE_ID || !TOKEN) throw new Error('Missing Airtable env vars');
 // 2️⃣ Tables
 const EMP_TABLE   = 'Employee Database';
 const SKILL_TABLE = 'Skills'; // This might not be strictly needed if skills are directly on employee record
+const TRAIT_TABLE = 'Traits'; // Assuming you have a Traits master table
 const WORK_EXPERIENCE_TABLE = 'Work Experience'; // Table name for work experience records
 
 // 3️⃣ Helpers
@@ -28,6 +29,10 @@ const getJSON = async (url: string) => {
 function fmt(d?: string) {
   return d ? new Date(d).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' }) : '';
 }
+
+// Global variables to store master lists of skills and traits
+let allSkills: { id: string; name: string }[] = [];
+let allTraits: { id: string; name: string }[] = [];
 
 // 4️⃣ toggle UI for main profile fields (Job Title, Bio, Phone)
 function toggleEdit(on: boolean) {
@@ -129,6 +134,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
   }
 
+  // Fetch master lists of skills and traits once on load
+  allSkills = (await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SKILL_TABLE)}`)).records.map((r: any) => ({ id: r.id, name: r.fields['Skill Name'] || r.fields.Name }));
+  allTraits = (await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TRAIT_TABLE)}`)).records.map((r: any) => ({ id: r.id, name: r.fields['Trait Name'] || r.fields.Name }));
+
   try {
     const emp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
     const f = emp.fields; // Employee fields
@@ -200,27 +209,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Populate Skills from the employee record
-    const empSkillsEl = $('emp-skills'); // This is the display div
-    const currentSkills = Array.isArray(f.Skills) ? f.Skills : (f.Skills ? String(f.Skills).split(',') : []); // Data for modal
+    const empSkillsEl = $('emp-skills'); // Display div
+    // f.Skills will be an array of { id: 'recXYZ', name: 'Skill Name' } if it's a linked record lookup
+    const currentSkillsLinked = Array.isArray(f.Skills) ? f.Skills : [];
     if (empSkillsEl) {
-        empSkillsEl.innerHTML = currentSkills // Display formatted
-            .filter((skill: string) => skill.trim() !== '')
-            .map((skill: string) =>
-                `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill}</span>`
+        empSkillsEl.innerHTML = currentSkillsLinked
+            .filter((skill: any) => skill.name && skill.name.trim() !== '')
+            .map((skill: any) =>
+                `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
             ).join('');
     }
+    // For modal pre-population, we need the IDs of current skills
+    const currentSkillIds = currentSkillsLinked.map((s: any) => s.id);
 
     // Populate Traits
-    const empTraitsEl = $('emp-traits'); // This is the display div
-    const currentTraits = Array.isArray(f.Traits) ? f.Traits : (f.Traits ? String(f.Traits).split('\n') : []); // Data for modal
+    const empTraitsEl = $('emp-traits'); // Display div
+    // f.Traits will be an array of { id: 'recXYZ', name: 'Trait Name' } if it's a linked record lookup
+    const currentTraitsLinked = Array.isArray(f.Traits) ? f.Traits : [];
     if (empTraitsEl) {
-        empTraitsEl.innerHTML = currentTraits // Display formatted
-            .filter((trait: string) => trait.trim() !== '')
-            .map((trait: string) => `<p class="text-gray-700">${trait}</p>`).join('');
+        empTraitsEl.innerHTML = currentTraitsLinked
+            .filter((trait: any) => trait.name && trait.name.trim() !== '')
+            .map((trait: any) => `<p class="text-gray-700">${trait.name}</p>`).join('');
     }
+    // For modal pre-population, we need the IDs of current traits
+    const currentTraitIds = currentTraitsLinked.map((t: any) => t.id);
 
     // --- Modal Functionality ---
-    // Client Experience Modal
+    // Client Experience Modal (remains largely the same, but using currentClientExp for prepopulation)
     const editClientExpBtn = $('editClientExpBtn');
     const clientExpModal = $('clientExpModal');
     const clientExpInput = $('clientExpInput') as HTMLTextAreaElement | null;
@@ -255,16 +270,25 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn("Client Experience modal elements not fully found. Edit button for client experience might not work. Check profile.html for #clientExpModal, #clientExpInput, #saveClientExpBtn, #cancelClientExpBtn.");
     }
 
+
     // Skills Modal
     const editSkillsBtn = $('editSkillsBtn');
     const skillsModal = $('skillsModal');
-    const skillsInput = $('skillsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
+    const skillsOptionsContainer = $('skillsOptions') as HTMLDivElement | null; // New container for checkboxes
     const saveSkillsBtn = $('saveSkillsBtn') as HTMLButtonElement | null;
     const cancelSkillsBtn = $('cancelSkillsBtn') as HTMLButtonElement | null;
 
-    if (editSkillsBtn && skillsModal && skillsInput && saveSkillsBtn && cancelSkillsBtn && empSkillsEl) {
+    if (editSkillsBtn && skillsModal && skillsOptionsContainer && saveSkillsBtn && cancelSkillsBtn && empSkillsEl) {
         editSkillsBtn.addEventListener('click', () => {
-            skillsInput.value = currentSkills.join(', '); // Join skills with comma for editing
+            // Populate skills checkboxes
+            if (skillsOptionsContainer) {
+                skillsOptionsContainer.innerHTML = allSkills.map(skill => `
+                    <div class="flex items-center">
+                        <input id="skill-${skill.id}" type="checkbox" value="${skill.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentSkillIds.includes(skill.id) ? 'checked' : ''}>
+                        <label for="skill-${skill.id}" class="ml-2 block text-sm text-gray-900">${skill.name}</label>
+                    </div>
+                `).join('');
+            }
             skillsModal.classList.remove('hidden');
         });
 
@@ -273,13 +297,22 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
 
         saveSkillsBtn.addEventListener('click', async () => {
-            const newSkills = skillsInput.value.split(',').map(s => s.trim()).filter(s => s !== '');
+            const selectedSkillIds: string[] = [];
+            skillsOptionsContainer?.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedSkillIds.push((checkbox as HTMLInputElement).value);
+            });
+
             try {
-                await updateEmployeeRecord(recordId, { 'Skills': newSkills });
+                // Airtable expects an array of record IDs for linked record fields
+                await updateEmployeeRecord(recordId, { 'Skills': selectedSkillIds });
                 // Update display after successful save
-                empSkillsEl.innerHTML = newSkills
-                    .map((skill: string) =>
-                        `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill}</span>`
+                // Re-fetch employee data to get updated skill names for display
+                const updatedEmp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
+                const updatedSkillsLinked = Array.isArray(updatedEmp.fields.Skills) ? updatedEmp.fields.Skills : [];
+                empSkillsEl.innerHTML = updatedSkillsLinked
+                    .filter((skill: any) => skill.name && skill.name.trim() !== '')
+                    .map((skill: any) =>
+                        `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
                     ).join('');
                 skillsModal.classList.add('hidden');
             } catch (error) {
@@ -288,19 +321,27 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         });
     } else if (editSkillsBtn) {
-        console.warn("Skills modal elements not fully found. Edit button for skills might not work. Check profile.html for #skillsModal, #skillsInput, #saveSkillsBtn, #cancelSkillsBtn.");
+        console.warn("Skills modal elements not fully found. Edit button for skills might not work. Check profile.html for #skillsModal, #skillsOptions, #saveSkillsBtn, #cancelSkillsBtn.");
     }
 
     // Traits Modal
     const editTraitsBtn = $('editTraitsBtn');
     const traitsModal = $('traitsModal');
-    const traitsInput = $('traitsInput') as HTMLTextAreaElement | null; // Assuming you'll add this to HTML
+    const traitsOptionsContainer = $('traitsOptions') as HTMLDivElement | null; // New container for checkboxes
     const saveTraitsBtn = $('saveTraitsBtn') as HTMLButtonElement | null;
     const cancelTraitsBtn = $('cancelTraitsBtn') as HTMLButtonElement | null;
 
-    if (editTraitsBtn && traitsModal && traitsInput && saveTraitsBtn && cancelTraitsBtn && empTraitsEl) {
+    if (editTraitsBtn && traitsModal && traitsOptionsContainer && saveTraitsBtn && cancelTraitsBtn && empTraitsEl) {
         editTraitsBtn.addEventListener('click', () => {
-            traitsInput.value = currentTraits.join('\n'); // Join traits with newline for editing
+            // Populate traits checkboxes
+            if (traitsOptionsContainer) {
+                traitsOptionsContainer.innerHTML = allTraits.map(trait => `
+                    <div class="flex items-center">
+                        <input id="trait-${trait.id}" type="checkbox" value="${trait.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentTraitIds.includes(trait.id) ? 'checked' : ''}>
+                        <label for="trait-${trait.id}" class="ml-2 block text-sm text-gray-900">${trait.name}</label>
+                    </div>
+                `).join('');
+            }
             traitsModal.classList.remove('hidden');
         });
 
@@ -309,12 +350,21 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
 
         saveTraitsBtn.addEventListener('click', async () => {
-            const newTraits = traitsInput.value.split('\n').map(t => t.trim()).filter(t => t !== '');
+            const selectedTraitIds: string[] = [];
+            traitsOptionsContainer?.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedTraitIds.push((checkbox as HTMLInputElement).value);
+            });
+
             try {
-                await updateEmployeeRecord(recordId, { 'Traits': newTraits });
+                // Airtable expects an array of record IDs for linked record fields
+                await updateEmployeeRecord(recordId, { 'Traits': selectedTraitIds });
                 // Update display after successful save
-                empTraitsEl.innerHTML = newTraits
-                    .map((trait: string) => `<p class="text-gray-700">${trait}</p>`).join('');
+                // Re-fetch employee data to get updated trait names for display
+                const updatedEmp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
+                const updatedTraitsLinked = Array.isArray(updatedEmp.fields.Traits) ? updatedEmp.fields.Traits : [];
+                empTraitsEl.innerHTML = updatedTraitsLinked
+                    .filter((trait: any) => trait.name && trait.name.trim() !== '')
+                    .map((trait: any) => `<p class="text-gray-700">${trait.name}</p>`).join('');
                 traitsModal.classList.add('hidden');
             } catch (error) {
                 console.error('Error updating traits:', error);
@@ -322,7 +372,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         });
     } else if (editTraitsBtn) {
-        console.warn("Traits modal elements not fully found. Edit button for traits might not work. Check profile.html for #traitsModal, #traitsInput, #saveTraitsBtn, #cancelTraitsBtn.");
+        console.warn("Traits modal elements not fully found. Edit button for traits might not work. Check profile.html for #traitsModal, #traitsOptions, #saveTraitsBtn, #cancelTraitsBtn.");
     }
 
   } catch (error) {
