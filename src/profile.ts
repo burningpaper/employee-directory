@@ -209,30 +209,28 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Populate Skills from the employee record
-    const empSkillsEl = $('emp-skills'); // Display div
-    // f.Skills will be an array of { id: 'recXYZ', name: 'Skill Name' } if it's a linked record lookup
-    const currentSkillsLinked = Array.isArray(f.Skills) ? f.Skills : [];
+    const empSkillsEl = $('emp-skills');
+    // f.Skills is an array of record IDs from Airtable, e.g., ['recABC', 'recDEF']
+    let currentSkillIds = Array.isArray(f.Skills) ? f.Skills : [];
     if (empSkillsEl) {
-        empSkillsEl.innerHTML = currentSkillsLinked
-            .filter((skill: any) => skill.name && skill.name.trim() !== '')
-            .map((skill: any) =>
+        // Find the full skill objects from our master list to get their names for display
+        const skillsToDisplay = allSkills.filter(skill => currentSkillIds.includes(skill.id));
+        empSkillsEl.innerHTML = skillsToDisplay
+            .map(skill =>
                 `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
             ).join('');
     }
-    // For modal pre-population, we need the IDs of current skills
-    const currentSkillIds = currentSkillsLinked.map((s: any) => s.id);
 
     // Populate Traits
-    const empTraitsEl = $('emp-traits'); // Display div
-    // f.Traits will be an array of { id: 'recXYZ', name: 'Trait Name' } if it's a linked record lookup
-    const currentTraitsLinked = Array.isArray(f.Traits) ? f.Traits : [];
+    const empTraitsEl = $('emp-traits');
+    // f.Traits is an array of record IDs from Airtable
+    let currentTraitIds = Array.isArray(f.Traits) ? f.Traits : [];
     if (empTraitsEl) {
-        empTraitsEl.innerHTML = currentTraitsLinked
-            .filter((trait: any) => trait.name && trait.name.trim() !== '')
-            .map((trait: any) => `<p class="text-gray-700">${trait.name}</p>`).join('');
+        // Find the full trait objects from our master list to get their names for display
+        const traitsToDisplay = allTraits.filter(trait => currentTraitIds.includes(trait.id));
+        empTraitsEl.innerHTML = traitsToDisplay
+            .map(trait => `<p class="text-gray-700">${trait.name}</p>`).join('');
     }
-    // For modal pre-population, we need the IDs of current traits
-    const currentTraitIds = currentTraitsLinked.map((t: any) => t.id);
 
     // --- Modal Functionality ---
     // Client Experience Modal (remains largely the same, but using currentClientExp for prepopulation)
@@ -305,15 +303,17 @@ window.addEventListener('DOMContentLoaded', async () => {
             try {
                 // Airtable expects an array of record IDs for linked record fields
                 await updateEmployeeRecord(recordId, { 'Skills': selectedSkillIds });
-                // Update display after successful save
-                // Re-fetch employee data to get updated skill names for display
-                const updatedEmp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
-                const updatedSkillsLinked = Array.isArray(updatedEmp.fields.Skills) ? updatedEmp.fields.Skills : [];
-                empSkillsEl.innerHTML = updatedSkillsLinked
-                    .filter((skill: any) => skill.name && skill.name.trim() !== '')
-                    .map((skill: any) =>
+
+                // Update the display with the new skills from our master list
+                const updatedSkillsForDisplay = allSkills.filter(skill => selectedSkillIds.includes(skill.id));
+                empSkillsEl.innerHTML = updatedSkillsForDisplay
+                    .map(skill =>
                         `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
                     ).join('');
+                
+                // Update the state for the next time the modal opens
+                currentSkillIds = selectedSkillIds;
+
                 skillsModal.classList.add('hidden');
             } catch (error) {
                 console.error('Error updating skills:', error);
@@ -358,13 +358,15 @@ window.addEventListener('DOMContentLoaded', async () => {
             try {
                 // Airtable expects an array of record IDs for linked record fields
                 await updateEmployeeRecord(recordId, { 'Traits': selectedTraitIds });
-                // Update display after successful save
-                // Re-fetch employee data to get updated trait names for display
-                const updatedEmp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
-                const updatedTraitsLinked = Array.isArray(updatedEmp.fields.Traits) ? updatedEmp.fields.Traits : [];
-                empTraitsEl.innerHTML = updatedTraitsLinked
-                    .filter((trait: any) => trait.name && trait.name.trim() !== '')
-                    .map((trait: any) => `<p class="text-gray-700">${trait.name}</p>`).join('');
+
+                // Update the display with the new traits from our master list
+                const updatedTraitsForDisplay = allTraits.filter(trait => selectedTraitIds.includes(trait.id));
+                empTraitsEl.innerHTML = updatedTraitsForDisplay
+                    .map(trait => `<p class="text-gray-700">${trait.name}</p>`).join('');
+
+                // Update the state for the next time the modal opens
+                currentTraitIds = selectedTraitIds;
+
                 traitsModal.classList.add('hidden');
             } catch (error) {
                 console.error('Error updating traits:', error);
