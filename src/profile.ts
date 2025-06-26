@@ -357,7 +357,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 // Airtable expects an array of record IDs for linked record fields
-                await updateEmployeeRecord(recordId, { 'Traits': selectedTraitIds });
+                await updateEmployeeRecord(recordId, { 'Personality Traits': selectedTraitIds });
                 console.log("Successfully updated Traits in Airtable with IDs:", selectedTraitIds);
                 // Update the display with the new traits from our master list
                 const updatedTraitsForDisplay = allTraits.filter(trait => selectedTraitIds.includes(trait.id));
