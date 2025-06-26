@@ -358,7 +358,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             try {
                 // Airtable expects an array of record IDs for linked record fields
                 await updateEmployeeRecord(recordId, { 'Traits': selectedTraitIds });
-
+                console.log("Successfully updated Traits in Airtable with IDs:", selectedTraitIds);
                 // Update the display with the new traits from our master list
                 const updatedTraitsForDisplay = allTraits.filter(trait => selectedTraitIds.includes(trait.id));
                 empTraitsEl.innerHTML = updatedTraitsForDisplay
@@ -370,7 +370,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 traitsModal.classList.add('hidden');
             } catch (error) {
                 console.error('Error updating traits:', error);
-                alert('Failed to save traits. Please try again.');
+                alert(`Failed to save traits. Please try again. Details: ${error.message}`);
             }
         });
     } else if (editTraitsBtn) {
