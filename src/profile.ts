@@ -11,7 +11,6 @@ if (!BASE_ID || !TOKEN) throw new Error('Missing Airtable env vars');
 const EMP_TABLE   = 'Employee Database';
 const SKILL_TABLE = 'Skills'; // Master Skills table
 const TRAIT_TABLE = 'Traits'; // Master Traits table
-const LEVEL_TABLE = 'Levels'; // Master Levels table (e.g., Basic, Average, Good, Excellent)
 const SKILL_LEVELS_TABLE = 'Skill Levels'; // Linking table for Employee-Skill-Level
 const WORK_EXPERIENCE_TABLE = 'Work Experience'; // Table name for work experience records
 
@@ -120,11 +119,11 @@ function fmt(d?: string) {
 
 // Global variables to store master lists of skills and traits
 let allSkills: { id: string; name: string }[] = [];
-let allLevels: { id: string; name: string }[] = [];
 let allTraits: { id: string; name: string }[] = [];
+const allLevels = ['Basic', 'Average', 'Good', 'Excellent']; // Hardcoded as per the single-select field
 
 // Global variable to store the employee's current skill levels (from Skill Levels table)
-let employeeSkillLevels: { id: string; skillId: string; levelId: string; skillName: string; levelName: string }[] = [];
+let employeeSkillLevels: { id: string; skillId: string; levelName: string; skillName: string; }[] = [];
 
 
 // 4️⃣ toggle UI for main profile fields (Job Title, Bio, Phone)
@@ -227,14 +226,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
   }
 
-  // Fetch master lists of skills, levels, and traits once on load
+  // Fetch master lists of skills and traits once on load
   try {
     allSkills = (await fetchAirtable(SKILL_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields['Skill Name'] || r.fields.Name }));
-    allLevels = (await fetchAirtable(LEVEL_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields.Name }));
     allTraits = (await fetchAirtable(TRAIT_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields['Trait Name'] || r.fields.Name }));
   } catch (error) {
-    console.error("Failed to fetch master data (Skills, Levels, Traits):", error);
-    alert("Failed to load master data for skills, levels, or traits. Please check console for details.");
+    console.error("Failed to fetch master data (Skills, Traits):", error);
+    alert("Failed to load master data for skills or traits. Please check console for details.");
     return; // Stop execution if master data cannot be loaded
   }
 
@@ -324,9 +322,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         employeeSkillLevels = skillLevelRecords.map((r: any) => ({
             id: r.id,
             skillId: r.fields.Skill?.[0], // Linked record returns array of IDs
-            levelId: r.fields.Level?.[0], // Linked record returns array of IDs
+            levelName: r.fields.Level, // This is now a string from the single-select field
             skillName: allSkills.find(s => s.id === r.fields.Skill?.[0])?.name || 'Unknown Skill', // Lookup from master list
-            levelName: allLevels.find(l => l.id === r.fields.Level?.[0])?.name || 'Unknown Level' // Lookup from master list
         }));
 
         if (empSkillsEl) {
@@ -399,18 +396,18 @@ window.addEventListener('DOMContentLoaded', async () => {
             // Populate skills checkboxes with associated level radio buttons
             if (skillsOptionsContainer) {
                 skillsOptionsContainer.innerHTML = allSkills.map(skill => {
-                    const currentLevel = employeeSkillLevels.find(esl => esl.skillId === skill.id)?.levelId;
-                    const levelRadios = allLevels.map(level => `
+                    const currentLevelName = employeeSkillLevels.find(esl => esl.skillId === skill.id)?.levelName;
+                    const levelRadios = allLevels.map(levelName => `
                         <div class="flex items-center mr-4">
-                            <input id="skill-${skill.id}-level-${level.id}" name="skill-${skill.id}-level" type="radio" value="${level.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" ${currentLevel === level.id ? 'checked' : ''}>
-                            <label for="skill-${skill.id}-level-${level.id}" class="ml-1 text-sm text-gray-700">${level.name}</label>
+                            <input id="skill-${skill.id}-level-${levelName}" name="skill-${skill.id}-level" type="radio" value="${levelName}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" ${currentLevelName === levelName ? 'checked' : ''}>
+                            <label for="skill-${skill.id}-level-${levelName}" class="ml-1 text-sm text-gray-700">${levelName}</label>
                         </div>
                     `).join('');
 
                     return `
                         <div class="border-b border-gray-200 py-2 last:border-b-0">
                             <div class="flex items-center mb-2">
-                                <input id="skill-${skill.id}" type="checkbox" value="${skill.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentLevel ? 'checked' : ''}>
+                                <input id="skill-${skill.id}" type="checkbox" value="${skill.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentLevelName ? 'checked' : ''}>
                                 <label for="skill-${skill.id}" class="ml-2 block text-base font-medium text-gray-900">${skill.name}</label>
                             </div>
                             <div class="flex flex-wrap ml-6">
@@ -428,12 +425,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
 
         saveSkillsBtn.addEventListener('click', async () => {
-            const selectedSkillLevelPairs: { skillId: string; levelId: string }[] = [];
+            const selectedSkillLevelPairs: { skillId: string; levelName: string }[] = [];
             skillsOptionsContainer?.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
                 const skillId = (checkbox as HTMLInputElement).value;
                 const selectedLevelRadio = skillsOptionsContainer.querySelector(`input[name="skill-${skillId}-level"]:checked`) as HTMLInputElement | null;
                 if (selectedLevelRadio) {
-                    selectedSkillLevelPairs.push({ skillId: skillId, levelId: selectedLevelRadio.value });
+                    selectedSkillLevelPairs.push({ skillId: skillId, levelName: selectedLevelRadio.value });
                 }
             });
 
@@ -452,12 +449,12 @@ window.addEventListener('DOMContentLoaded', async () => {
                     if (!newSelection) {
                         // Skill was deselected, mark for deletion
                         recordsToDelete.push(existing.id);
-                    } else if (newSelection.levelId !== existing.levelId) {
+                    } else if (newSelection.levelName !== existing.levelName) {
                         // Skill is still selected but level changed, mark for update
                         recordsToUpdate.push({
                             id: existing.id,
                             fields: {
-                                'Level': [newSelection.levelId]
+                                'Level': newSelection.levelName // Update with the string value
                             }
                         });
                     }
@@ -472,7 +469,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                             fields: {
                                 'Employee': [recordId],
                                 'Skill': [newSelection.skillId],
-                                'Level': [newSelection.levelId]
+                                'Level': newSelection.levelName // Set the string value
                             }
                         });
                     }
@@ -504,9 +501,8 @@ window.addEventListener('DOMContentLoaded', async () => {
                     employeeSkillLevels = updatedSkillLevelRecords.map((r: any) => ({
                         id: r.id,
                         skillId: r.fields.Skill?.[0],
-                        levelId: r.fields.Level?.[0],
+                        levelName: r.fields.Level,
                         skillName: allSkills.find(s => s.id === r.fields.Skill?.[0])?.name || 'Unknown Skill',
-                        levelName: allLevels.find(l => l.id === r.fields.Level?.[0])?.name || 'Unknown Level'
                     }));
                 } else {
                     employeeSkillLevels = [];
@@ -514,10 +510,14 @@ window.addEventListener('DOMContentLoaded', async () => {
 
                 // Update display after successful save
                 if (empSkillsEl) {
-                    empSkillsEl.innerHTML = employeeSkillLevels
-                        .map(sl =>
-                            `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
-                        ).join('');
+                    if (employeeSkillLevels.length > 0) {
+                        empSkillsEl.innerHTML = employeeSkillLevels
+                            .map(sl =>
+                                `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
+                            ).join('');
+                    } else {
+                        empSkillsEl.innerHTML = `<p class="text-gray-500">No skills listed.</p>`;
+                    }
                 }
 
                 skillsModal.classList.add('hidden');
