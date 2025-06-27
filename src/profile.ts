@@ -318,7 +318,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Fetch all Skill Level records linked to this employee via the 'Employee Code' field
     try {
-        const filter = `FIND('${recordId}', ARRAYJOIN({'Employee Code'}))`;
+        // The field in 'Skill Levels' that links to the 'Employee Database' table.
+        // The error "Unknown field names: 'employee code'" indicates the name is not 'Employee Code'.
+        const filter = `FIND('${recordId}', ARRAYJOIN({Employee}))`;
         const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
         const skillLevelRecords = skillLevelResponse.records || [];
 
@@ -494,7 +496,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 // 5. Re-fetch employee data to update the display and global employeeSkillLevels
                 // We can just re-query the Skill Levels table like we do on initial load.
                 try {
-                    const filter = `FIND('${recordId}', ARRAYJOIN({'Employee Code'}))`;
+                    const filter = `FIND('${recordId}', ARRAYJOIN({Employee}))`;
                     const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
                     const updatedSkillLevelRecords = skillLevelResponse.records || [];
 
