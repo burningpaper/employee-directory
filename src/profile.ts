@@ -9,22 +9,110 @@ if (!BASE_ID || !TOKEN) throw new Error('Missing Airtable env vars');
 
 // 2️⃣ Tables
 const EMP_TABLE   = 'Employee Database';
-const SKILL_TABLE = 'Skills'; // This might not be strictly needed if skills are directly on employee record
-const TRAIT_TABLE = 'Traits'; // Assuming you have a Traits master table
+const SKILL_TABLE = 'Skills'; // Master Skills table
+const TRAIT_TABLE = 'Traits'; // Master Traits table
+const LEVEL_TABLE = 'Levels'; // Master Levels table (e.g., Basic, Average, Good, Excellent)
+const SKILL_LEVELS_TABLE = 'Skill Levels'; // Linking table for Employee-Skill-Level
 const WORK_EXPERIENCE_TABLE = 'Work Experience'; // Table name for work experience records
 
 // 3️⃣ Helpers
 const authHeaders = { Authorization: `Bearer ${TOKEN}` };
 const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
-const getJSON = async (url: string) => {
-  const r = await fetch(url, { headers: authHeaders });
-  if (!r.ok) {
-    const errorText = await r.text();
-    console.error(`Error fetching from ${url}: ${r.status} - ${errorText}`);
-    throw new Error(`Failed to fetch data: ${r.status} - ${errorText}`);
-  }
-  return r.json();
-};
+
+// Helper function for fetching from Airtable with consistent error handling
+async function fetchAirtable(tableName: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', data?: any, recordId?: string) {
+    let url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tableName)}${recordId ? `/${recordId}` : ''}`;
+    const options: any = { method, headers: jsonHeaders };
+    if (data) options.body = JSON.stringify(data);
+
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`Airtable API error (${method} ${url}):`, response.status, errorData);
+        throw new Error(`Airtable API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    return await response.json();
+}
+
+// Helper for batch creation
+async function createAirtableRecords(tableName: string, records: any[]) {
+    const airtableApiUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tableName)}`;
+    const CHUNK_SIZE = 10;
+    let createdRecords: any[] = [];
+
+    for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+        const chunk = records.slice(i, i + CHUNK_SIZE);
+        const response = await fetch(airtableApiUrl, {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify({ records: chunk })
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to create records in ${tableName}: ${response.status} - ${JSON.stringify(errorData)}`);
+        }
+        const data = await response.json();
+        createdRecords = createdRecords.concat(data.records);
+    }
+    return createdRecords;
+}
+
+// Helper for batch update
+async function updateAirtableRecords(tableName: string, records: any[]) {
+    const airtableApiUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tableName)}`;
+    const CHUNK_SIZE = 10;
+    let updatedRecords: any[] = [];
+
+    for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+        const chunk = records.slice(i, i + CHUNK_SIZE);
+        const response = await fetch(airtableApiUrl, {
+            method: 'PATCH',
+            headers: jsonHeaders,
+            body: JSON.stringify({ records: chunk })
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to update records in ${tableName}: ${response.status} - ${JSON.stringify(errorData)}`);
+        }
+        const data = await response.json();
+        updatedRecords = updatedRecords.concat(data.records);
+    }
+    return updatedRecords;
+}
+
+// Helper for batch delete
+async function deleteAirtableRecords(tableName: string, recordIds: string[]) {
+    const airtableApiUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tableName)}`;
+    const CHUNK_SIZE = 10;
+    let deletedIds: string[] = [];
+
+    for (let i = 0; i < recordIds.length; i += CHUNK_SIZE) {
+        const chunk = recordIds.slice(i, i + CHUNK_SIZE);
+        const queryParams = chunk.map(id => `records[]=${id}`).join('&');
+        const response = await fetch(`${airtableApiUrl}?${queryParams}`, {
+            method: 'DELETE',
+            headers: authHeaders
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to delete records from ${tableName}: ${response.status} - ${JSON.stringify(errorData)}`);
+        }
+        const data = await response.json();
+        deletedIds = deletedIds.concat(data.records.map((r: any) => r.id));
+    }
+    return deletedIds;
+}
+
+// Helper function to perform combined Airtable operations (create, update, delete)
+async function performAirtableOperations(tableName: string, toCreate: any[], toUpdate: any[], toDelete: string[]) {
+    const created = toCreate.length ? await createAirtableRecords(tableName, toCreate) : [];
+    const updated = toUpdate.length ? await updateAirtableRecords(tableName, toUpdate) : [];
+    const deleted = toDelete.length ? await deleteAirtableRecords(tableName, toDelete) : [];
+    return { created, updated, deleted };
+}
+
 
 function fmt(d?: string) {
   return d ? new Date(d).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' }) : '';
@@ -32,7 +120,12 @@ function fmt(d?: string) {
 
 // Global variables to store master lists of skills and traits
 let allSkills: { id: string; name: string }[] = [];
+let allLevels: { id: string; name: string }[] = [];
 let allTraits: { id: string; name: string }[] = [];
+
+// Global variable to store the employee's current skill levels (from Skill Levels table)
+let employeeSkillLevels: { id: string; skillId: string; levelId: string; skillName: string; levelName: string }[] = [];
+
 
 // 4️⃣ toggle UI for main profile fields (Job Title, Bio, Phone)
 function toggleEdit(on: boolean) {
@@ -134,12 +227,20 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
   }
 
-  // Fetch master lists of skills and traits once on load
-  allSkills = (await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SKILL_TABLE)}`)).records.map((r: any) => ({ id: r.id, name: r.fields['Skill Name'] || r.fields.Name }));
-  allTraits = (await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TRAIT_TABLE)}`)).records.map((r: any) => ({ id: r.id, name: r.fields['Trait Name'] || r.fields.Name }));
+  // Fetch master lists of skills, levels, and traits once on load
+  try {
+    allSkills = (await fetchAirtable(SKILL_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields['Skill Name'] || r.fields.Name }));
+    allLevels = (await fetchAirtable(LEVEL_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields.Name }));
+    allTraits = (await fetchAirtable(TRAIT_TABLE, 'GET')).records.map((r: any) => ({ id: r.id, name: r.fields['Trait Name'] || r.fields.Name }));
+  } catch (error) {
+    console.error("Failed to fetch master data (Skills, Levels, Traits):", error);
+    alert("Failed to load master data for skills, levels, or traits. Please check console for details.");
+    return; // Stop execution if master data cannot be loaded
+  }
+
 
   try {
-    const emp = await getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(EMP_TABLE)}/${recordId}`);
+    const emp = await fetchAirtable(EMP_TABLE, 'GET', undefined, recordId);
     const f = emp.fields; // Employee fields
 
     const empNameEl = $('emp-name');
@@ -175,7 +276,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         try {
             // Create a fetch promise for each linked record ID
-            const experiencePromises = workExpIds.map(id => getJSON(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(WORK_EXPERIENCE_TABLE)}/${id}`));
+            const experiencePromises = workExpIds.map(id => fetchAirtable(WORK_EXPERIENCE_TABLE, 'GET', undefined, id));
             const experienceRecords = await Promise.all(experiencePromises);
 
             // Render the full details for each job
@@ -210,21 +311,39 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Populate Skills from the employee record
     const empSkillsEl = $('emp-skills');
-    // f.Skills is an array of record IDs from Airtable, e.g., ['recABC', 'recDEF']
-    let currentSkillIds = Array.isArray(f.Skills) ? f.Skills : [];
-    if (empSkillsEl) {
-        // Find the full skill objects from our master list to get their names for display
-        const skillsToDisplay = allSkills.filter(skill => currentSkillIds.includes(skill.id));
-        empSkillsEl.innerHTML = skillsToDisplay
-            .map(skill =>
-                `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
-            ).join('');
+    // f['Employee Skill Levels'] will be an array of record IDs from Airtable, e.g., ['recABC', 'recDEF']
+    const employeeSkillLevelIds = Array.isArray(f['Employee Skill Levels']) ? f['Employee Skill Levels'] : [];
+
+    // Fetch the actual Skill Levels records to get the linked Skill and Level details
+    if (employeeSkillLevelIds.length > 0) {
+        const skillLevelPromises = employeeSkillLevelIds.map(id =>
+            fetchAirtable(SKILL_LEVELS_TABLE, 'GET', undefined, id)
+        );
+        const skillLevelRecords = await Promise.all(skillLevelPromises);
+
+        employeeSkillLevels = skillLevelRecords.map((r: any) => ({
+            id: r.id,
+            skillId: r.fields.Skill?.[0], // Linked record returns array of IDs
+            levelId: r.fields.Level?.[0], // Linked record returns array of IDs
+            skillName: allSkills.find(s => s.id === r.fields.Skill?.[0])?.name || 'Unknown Skill', // Lookup from master list
+            levelName: allLevels.find(l => l.id === r.fields.Level?.[0])?.name || 'Unknown Level' // Lookup from master list
+        }));
+
+        if (empSkillsEl) {
+            empSkillsEl.innerHTML = employeeSkillLevels
+                .map(sl =>
+                    `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
+                ).join('');
+        }
+    } else if (empSkillsEl) {
+        empSkillsEl.innerHTML = `<p class="text-gray-500">No skills listed.</p>`;
     }
 
+
     // Populate Traits
-    const empTraitsEl = $('emp-traits');
-    // f.Traits is an array of record IDs from Airtable
-    let currentTraitIds = Array.isArray(f.Traits) ? f.Traits : [];
+    const empTraitsEl = $('emp-traits'); // Display div
+    // f['Personality Traits'] is an array of record IDs from Airtable
+    let currentTraitIds = Array.isArray(f['Personality Traits']) ? f['Personality Traits'] : []; // Use 'Personality Traits'
     if (empTraitsEl) {
         // Find the full trait objects from our master list to get their names for display
         const traitsToDisplay = allTraits.filter(trait => currentTraitIds.includes(trait.id));
@@ -268,7 +387,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn("Client Experience modal elements not fully found. Edit button for client experience might not work. Check profile.html for #clientExpModal, #clientExpInput, #saveClientExpBtn, #cancelClientExpBtn.");
     }
 
-
     // Skills Modal
     const editSkillsBtn = $('editSkillsBtn');
     const skillsModal = $('skillsModal');
@@ -278,14 +396,29 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (editSkillsBtn && skillsModal && skillsOptionsContainer && saveSkillsBtn && cancelSkillsBtn && empSkillsEl) {
         editSkillsBtn.addEventListener('click', () => {
-            // Populate skills checkboxes
+            // Populate skills checkboxes with associated level radio buttons
             if (skillsOptionsContainer) {
-                skillsOptionsContainer.innerHTML = allSkills.map(skill => `
-                    <div class="flex items-center">
-                        <input id="skill-${skill.id}" type="checkbox" value="${skill.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentSkillIds.includes(skill.id) ? 'checked' : ''}>
-                        <label for="skill-${skill.id}" class="ml-2 block text-sm text-gray-900">${skill.name}</label>
-                    </div>
-                `).join('');
+                skillsOptionsContainer.innerHTML = allSkills.map(skill => {
+                    const currentLevel = employeeSkillLevels.find(esl => esl.skillId === skill.id)?.levelId;
+                    const levelRadios = allLevels.map(level => `
+                        <div class="flex items-center mr-4">
+                            <input id="skill-${skill.id}-level-${level.id}" name="skill-${skill.id}-level" type="radio" value="${level.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" ${currentLevel === level.id ? 'checked' : ''}>
+                            <label for="skill-${skill.id}-level-${level.id}" class="ml-1 text-sm text-gray-700">${level.name}</label>
+                        </div>
+                    `).join('');
+
+                    return `
+                        <div class="border-b border-gray-200 py-2 last:border-b-0">
+                            <div class="flex items-center mb-2">
+                                <input id="skill-${skill.id}" type="checkbox" value="${skill.id}" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" ${currentLevel ? 'checked' : ''}>
+                                <label for="skill-${skill.id}" class="ml-2 block text-base font-medium text-gray-900">${skill.name}</label>
+                            </div>
+                            <div class="flex flex-wrap ml-6">
+                                ${levelRadios}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
             skillsModal.classList.remove('hidden');
         });
@@ -295,26 +428,100 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
 
         saveSkillsBtn.addEventListener('click', async () => {
-            const selectedSkillIds: string[] = [];
+            const selectedSkillLevelPairs: { skillId: string; levelId: string }[] = [];
             skillsOptionsContainer?.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-                selectedSkillIds.push((checkbox as HTMLInputElement).value);
+                const skillId = (checkbox as HTMLInputElement).value;
+                const selectedLevelRadio = skillsOptionsContainer.querySelector(`input[name="skill-${skillId}-level"]:checked`) as HTMLInputElement | null;
+                if (selectedLevelRadio) {
+                    selectedSkillLevelPairs.push({ skillId: skillId, levelId: selectedLevelRadio.value });
+                }
             });
 
             try {
-                // Airtable expects an array of record IDs for linked record fields
-                await updateEmployeeRecord(recordId, { 'Skills': selectedSkillIds });
+                // 1. Get existing Skill Levels for this employee
+                const existingSkillLevelRecords = employeeSkillLevels; // Use the global variable populated on load
 
-                // Update the display with the new skills from our master list
-                const updatedSkillsForDisplay = allSkills.filter(skill => selectedSkillIds.includes(skill.id));
-                empSkillsEl.innerHTML = updatedSkillsForDisplay
-                    .map(skill =>
-                        `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${skill.name}</span>`
-                    ).join('');
+                // 2. Determine records to delete, update, and create
+                const recordsToDelete: string[] = [];
+                const recordsToCreate: { fields: { [key: string]: any } }[] = [];
+                const recordsToUpdate: { id: string; fields: { [key: string]: any } }[] = [];
+
+                // Identify deletions and updates
+                existingSkillLevelRecords.forEach(existing => {
+                    const newSelection = selectedSkillLevelPairs.find(s => s.skillId === existing.skillId);
+                    if (!newSelection) {
+                        // Skill was deselected, mark for deletion
+                        recordsToDelete.push(existing.id);
+                    } else if (newSelection.levelId !== existing.levelId) {
+                        // Skill is still selected but level changed, mark for update
+                        recordsToUpdate.push({
+                            id: existing.id,
+                            fields: {
+                                'Level': [newSelection.levelId]
+                            }
+                        });
+                    }
+                });
+
+                // Identify creations
+                selectedSkillLevelPairs.forEach(newSelection => {
+                    const existing = existingSkillLevelRecords.find(esl => esl.skillId === newSelection.skillId);
+                    if (!existing) {
+                        // New skill selected, mark for creation
+                        recordsToCreate.push({
+                            fields: {
+                                'Employee': [recordId],
+                                'Skill': [newSelection.skillId],
+                                'Level': [newSelection.levelId]
+                            }
+                        });
+                    }
+                });
+
+                // 3. Perform batch operations
+                const { created: createdSkillLevels } = await performAirtableOperations(SKILL_LEVELS_TABLE, recordsToCreate, recordsToUpdate, recordsToDelete);
                 
-                // Update the state for the next time the modal opens
-                currentSkillIds = selectedSkillIds;
+                // 4. Update the Employee Database record's 'Employee Skill Levels' field
+                // This field should contain an array of all current Skill Levels record IDs for this employee
+                const allCurrentSkillLevelIds = [
+                    ...existingSkillLevelRecords.filter(esl => !recordsToDelete.includes(esl.id)).map(esl => esl.id),
+                    ...createdSkillLevels.map((r: any) => r.id)
+                ];
+
+                await updateEmployeeRecord(recordId, { 'Employee Skill Levels': allCurrentSkillLevelIds });
+
+                // 5. Re-fetch employee data to update the display and global employeeSkillLevels
+                const updatedEmp = await fetchAirtable(EMP_TABLE, 'GET', undefined, recordId);
+                const updatedEmployeeSkillLevelIds = Array.isArray(updatedEmp.fields['Employee Skill Levels']) ? updatedEmp.fields['Employee Skill Levels'] : [];
+
+                // Re-populate employeeSkillLevels global variable for next modal open
+                if (updatedEmployeeSkillLevelIds.length > 0) {
+                    const updatedSkillLevelPromises = updatedEmployeeSkillLevelIds.map(id =>
+                        fetchAirtable(SKILL_LEVELS_TABLE, 'GET', undefined, id)
+                    );
+                    const updatedSkillLevelRecords = await Promise.all(updatedSkillLevelPromises);
+
+                    employeeSkillLevels = updatedSkillLevelRecords.map((r: any) => ({
+                        id: r.id,
+                        skillId: r.fields.Skill?.[0],
+                        levelId: r.fields.Level?.[0],
+                        skillName: allSkills.find(s => s.id === r.fields.Skill?.[0])?.name || 'Unknown Skill',
+                        levelName: allLevels.find(l => l.id === r.fields.Level?.[0])?.name || 'Unknown Level'
+                    }));
+                } else {
+                    employeeSkillLevels = [];
+                }
+
+                // Update display after successful save
+                if (empSkillsEl) {
+                    empSkillsEl.innerHTML = employeeSkillLevels
+                        .map(sl =>
+                            `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
+                        ).join('');
+                }
 
                 skillsModal.classList.add('hidden');
+                alert('Skills updated successfully!');
             } catch (error) {
                 console.error('Error updating skills:', error);
                 alert('Failed to save skills. Please try again.');
@@ -368,7 +575,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 currentTraitIds = selectedTraitIds;
 
                 traitsModal.classList.add('hidden');
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error updating traits:', error);
                 alert(`Failed to save traits. Please try again. Details: ${error.message}`);
             }
