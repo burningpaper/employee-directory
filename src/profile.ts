@@ -309,8 +309,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Populate Skills from the employee record
     const empSkillsEl = $('emp-skills');
-    // f['Employee Skill Levels'] will be an array of record IDs from Airtable, e.g., ['recABC', 'recDEF']
-    const employeeSkillLevelIds = Array.isArray(f['Employee Skill Levels']) ? f['Employee Skill Levels'] : [];
+    // This field on the Employee Database table links to the Skill Levels table
+    const employeeSkillLevelIds = Array.isArray(f['Skills List']) ? f['Skills List'] : [];
 
     // Fetch the actual Skill Levels records to get the linked Skill and Level details
     if (employeeSkillLevelIds.length > 0) {
@@ -485,11 +485,11 @@ window.addEventListener('DOMContentLoaded', async () => {
                     ...createdSkillLevels.map((r: any) => r.id)
                 ];
 
-                await updateEmployeeRecord(recordId, { 'Employee Skill Levels': allCurrentSkillLevelIds });
+                await updateEmployeeRecord(recordId, { 'Skills List': allCurrentSkillLevelIds });
 
                 // 5. Re-fetch employee data to update the display and global employeeSkillLevels
                 const updatedEmp = await fetchAirtable(EMP_TABLE, 'GET', undefined, recordId);
-                const updatedEmployeeSkillLevelIds = Array.isArray(updatedEmp.fields['Employee Skill Levels']) ? updatedEmp.fields['Employee Skill Levels'] : [];
+                const updatedEmployeeSkillLevelIds = Array.isArray(updatedEmp.fields['Skills List']) ? updatedEmp.fields['Skills List'] : [];
 
                 // Re-populate employeeSkillLevels global variable for next modal open
                 if (updatedEmployeeSkillLevelIds.length > 0) {
