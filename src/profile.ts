@@ -22,7 +22,13 @@ const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
 async function fetchAirtable(tableName: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', data?: any, recordId?: string) {
     let url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(tableName)}${recordId ? `/${recordId}` : ''}`;
     const options: any = { method, headers: jsonHeaders };
-    if (data) options.body = JSON.stringify(data);
+
+    if (method === 'GET' && data) {
+        const params = new URLSearchParams(data);
+        url += `?${params.toString()}`;
+    } else if (data) {
+        options.body = JSON.stringify(data);
+    }
 
     const response = await fetch(url, options);
 
@@ -309,15 +315,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Populate Skills from the employee record
     const empSkillsEl = $('emp-skills');
-    // This field on the Employee Database table links to the Skill Levels table
-    const employeeSkillLevelIds = Array.isArray(f['Skills List']) ? f['Skills List'] : [];
 
-    // Fetch the actual Skill Levels records to get the linked Skill and Level details
-    if (employeeSkillLevelIds.length > 0) {
-        const skillLevelPromises = employeeSkillLevelIds.map(id =>
-            fetchAirtable(SKILL_LEVELS_TABLE, 'GET', undefined, id)
-        );
-        const skillLevelRecords = await Promise.all(skillLevelPromises);
+    // Fetch all Skill Level records linked to this employee via the 'Employee Code' field
+    try {
+        const filter = `FIND('${recordId}', ARRAYJOIN({'Employee Code'}))`;
+        const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
+        const skillLevelRecords = skillLevelResponse.records || [];
 
         employeeSkillLevels = skillLevelRecords.map((r: any) => ({
             id: r.id,
@@ -327,13 +330,18 @@ window.addEventListener('DOMContentLoaded', async () => {
         }));
 
         if (empSkillsEl) {
-            empSkillsEl.innerHTML = employeeSkillLevels
-                .map(sl =>
-                    `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
-                ).join('');
+            if (employeeSkillLevels.length > 0) {
+                empSkillsEl.innerHTML = employeeSkillLevels
+                    .map(sl =>
+                        `<span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">${sl.skillName} (${sl.levelName})</span>`
+                    ).join('');
+            } else {
+                empSkillsEl.innerHTML = `<p class="text-gray-500">No skills listed.</p>`;
+            }
         }
-    } else if (empSkillsEl) {
-        empSkillsEl.innerHTML = `<p class="text-gray-500">No skills listed.</p>`;
+    } catch (err) {
+        console.error("Failed to fetch skill levels:", err);
+        if (empSkillsEl) empSkillsEl.innerHTML = `<p class="text-red-500">Could not load skills.</p>`;
     }
 
 
@@ -478,25 +486,17 @@ window.addEventListener('DOMContentLoaded', async () => {
                 // 3. Perform batch operations
                 const { created: createdSkillLevels } = await performAirtableOperations(SKILL_LEVELS_TABLE, recordsToCreate, recordsToUpdate, recordsToDelete);
                 
-                // 4. Update the Employee Database record's 'Employee Skill Levels' field
-                // This field should contain an array of all current Skill Levels record IDs for this employee
-                const allCurrentSkillLevelIds = [
-                    ...existingSkillLevelRecords.filter(esl => !recordsToDelete.includes(esl.id)).map(esl => esl.id),
-                    ...createdSkillLevels.map((r: any) => r.id)
-                ];
-
-                await updateEmployeeRecord(recordId, { 'Skills List': allCurrentSkillLevelIds });
+                // 4. Update the 'Skills List' field on the Employee Database record.
+                // This field links directly to the master Skills table, so we send an array of Skill record IDs.
+                const selectedSkillIds = selectedSkillLevelPairs.map(p => p.skillId);
+                await updateEmployeeRecord(recordId, { 'Skills List': selectedSkillIds });
 
                 // 5. Re-fetch employee data to update the display and global employeeSkillLevels
-                const updatedEmp = await fetchAirtable(EMP_TABLE, 'GET', undefined, recordId);
-                const updatedEmployeeSkillLevelIds = Array.isArray(updatedEmp.fields['Skills List']) ? updatedEmp.fields['Skills List'] : [];
-
-                // Re-populate employeeSkillLevels global variable for next modal open
-                if (updatedEmployeeSkillLevelIds.length > 0) {
-                    const updatedSkillLevelPromises = updatedEmployeeSkillLevelIds.map(id =>
-                        fetchAirtable(SKILL_LEVELS_TABLE, 'GET', undefined, id)
-                    );
-                    const updatedSkillLevelRecords = await Promise.all(updatedSkillLevelPromises);
+                // We can just re-query the Skill Levels table like we do on initial load.
+                try {
+                    const filter = `FIND('${recordId}', ARRAYJOIN({'Employee Code'}))`;
+                    const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
+                    const updatedSkillLevelRecords = skillLevelResponse.records || [];
 
                     employeeSkillLevels = updatedSkillLevelRecords.map((r: any) => ({
                         id: r.id,
@@ -504,9 +504,11 @@ window.addEventListener('DOMContentLoaded', async () => {
                         levelName: r.fields.Level,
                         skillName: allSkills.find(s => s.id === r.fields.Skill?.[0])?.name || 'Unknown Skill',
                     }));
-                } else {
-                    employeeSkillLevels = [];
+                } catch (err) {
+                    console.error("Failed to re-fetch skill levels after update:", err);
+                    // Don't overwrite the display with an error if the save was successful but the re-fetch failed.
                 }
+
 
                 // Update display after successful save
                 if (empSkillsEl) {
