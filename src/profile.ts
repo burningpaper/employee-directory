@@ -467,7 +467,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         // New skill selected, mark for creation
                         recordsToCreate.push({
                             fields: {
-                                'Employee': [recordId],
+                                'Employee Code': [recordId], // Corrected field name
                                 'Skill': [newSelection.skillId],
                                 'Level': newSelection.levelName // Set the string value
                             }
