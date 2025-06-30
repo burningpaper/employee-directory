@@ -318,11 +318,17 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Fetch all Skill Level records linked to this employee via the 'Employee Code' field
     try {
-        // The field in 'Skill Levels' that links to the 'Employee Database' table.
-        // The error "Unknown field names: 'employee code'" indicates the name is not 'Employee Code'.
-        const filter = `FIND('${recordId}', ARRAYJOIN({Employee}))`;
-        const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
-        const skillLevelRecords = skillLevelResponse.records || [];
+        // NOTE: Filtering by a linked record ID in a GET request is not directly supported by Airtable's filterByFormula
+        // without a dedicated lookup field. The most robust client-side solution is to fetch all records and filter them here.
+        // This can be inefficient if you have thousands of skill level entries, but it is guaranteed to work.
+        // The 'best practice' solution is to add a Lookup field in your 'Skill Levels' table that looks up the RECORD_ID()
+        // from the employee link, and then filter on that field.
+
+        // WORKAROUND: Fetch all and filter in code.
+        const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET');
+        const allSkillLevelRecords = skillLevelResponse.records || [];
+        // The field name 'Employee Code' is based on your previous input for the save functionality.
+        const skillLevelRecords = allSkillLevelRecords.filter(r => r.fields['Employee Code'] && r.fields['Employee Code'].includes(recordId));
 
         employeeSkillLevels = skillLevelRecords.map((r: any) => ({
             id: r.id,
@@ -496,9 +502,11 @@ window.addEventListener('DOMContentLoaded', async () => {
                 // 5. Re-fetch employee data to update the display and global employeeSkillLevels
                 // We can just re-query the Skill Levels table like we do on initial load.
                 try {
-                    const filter = `FIND('${recordId}', ARRAYJOIN({Employee}))`;
-                    const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET', { filterByFormula: filter });
-                    const updatedSkillLevelRecords = skillLevelResponse.records || [];
+                    // Re-fetch and filter using the same workaround logic
+                    const skillLevelResponse = await fetchAirtable(SKILL_LEVELS_TABLE, 'GET');
+                    const allSkillLevelRecords = skillLevelResponse.records || [];
+                    const updatedSkillLevelRecords = allSkillLevelRecords.filter(r => r.fields['Employee Code'] && r.fields['Employee Code'].includes(recordId));
+
 
                     employeeSkillLevels = updatedSkillLevelRecords.map((r: any) => ({
                         id: r.id,
